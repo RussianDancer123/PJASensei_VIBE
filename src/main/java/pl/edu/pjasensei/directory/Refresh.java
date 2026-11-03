@@ -82,12 +82,12 @@ class Refresh {
             return;
         }
         var students = new ArrayList<CognitoDirectory.Member>();
-        for (var member : members) {
-            if (ensureStudentSaved(classGroup, member, failures)) {
-                students.add(member);
-            }
-        }
         try {
+            for (var member : members) {
+                if (ensureStudentSaved(classGroup, member, failures)) {
+                    students.add(member);
+                }
+            }
             store.replaceMembers(classGroup, students.stream().map(CognitoDirectory.Member::sub).toList());
         } catch (DataAccessException e) {
             log.warn("Could not save the members of ClassGroup {}", classGroup, e);
@@ -107,20 +107,25 @@ class Refresh {
         }
     }
 
-    /** What the identity provider now says about a saved Student is ignored, so it cannot fail. */
+    /**
+     * What the identity provider now says about a saved Student is ignored, so it cannot fail.
+     *
+     * @throws DataAccessException when it cannot tell whether they are saved, so nobody who may belong
+     *     to the ClassGroup is dropped from it
+     */
     private boolean ensureStudentSaved(String classGroup, CognitoDirectory.Member member, List<Failure> failures) {
         if (member.sub() == null) {
             failures.add(new Failure(classGroup, member.username(), "The identity provider gave no sub."));
             return false;
         }
+        if (store.isStudentSaved(member.sub())) {
+            return true;
+        }
+        if (!isUsable(member.email())) {
+            failures.add(new Failure(classGroup, member.username(), NO_USABLE_EMAIL));
+            return false;
+        }
         try {
-            if (store.isStudentSaved(member.sub())) {
-                return true;
-            }
-            if (!isUsable(member.email())) {
-                failures.add(new Failure(classGroup, member.username(), NO_USABLE_EMAIL));
-                return false;
-            }
             store.addStudent(member.sub(), member.email(), member.studentNumber());
             return true;
         } catch (DuplicateKeyException e) {

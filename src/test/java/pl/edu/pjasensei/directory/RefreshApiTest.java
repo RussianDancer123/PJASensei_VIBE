@@ -535,6 +535,25 @@ class RefreshApiTest {
         return student.sub();
     }
 
+    @Test
+    void aClassGroupKeepsItsMembersWhenSavedStudentsCannotBeChecked() {
+        int number = cognito.newGroupNumber();
+        var student = newStudent();
+        cognito.setGroup(number + "c", List.of(student));
+        var token = instructorOf(number + "w");
+        refreshWith(token).expectStatus().isOk();
+
+        jdbc.sql("ALTER TABLE students RENAME TO students_hidden").update();
+        try {
+            refreshWith(token).expectStatus().isOk().expectBody()
+                    .jsonPath("$.failures[?(@.classGroup == '%sc')].person".formatted(number)).isEmpty();
+        } finally {
+            jdbc.sql("ALTER TABLE students_hidden RENAME TO students").update();
+        }
+
+        assertThat(studentNumbersIn(token, 0)).containsExactly(student.username());
+    }
+
     /** Provokes a database error that is not a Student Number clash, for this test's rows only. */
     private void whileDatabaseRejects(String table, String allowed, Runnable action) {
         var constraint = "reject_" + UUID.randomUUID().toString().replace("-", "");
