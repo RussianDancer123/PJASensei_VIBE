@@ -1,0 +1,19 @@
+{
+	auto_https off
+	admin off
+}
+
+:80 {
+	# Development routes, present only when compose.dev.yaml mounts them.
+	import /etc/caddy/dev.d/*.caddy
+
+	@api path /api /api/*
+	handle @api {
+		reverse_proxy {$SPRING_ADDRESS}
+	}
+
+	handle {
+		header Content-Security-Policy "frame-ancestors {$FRAME_ANCESTORS}"
+		reverse_proxy {$FRONTEND_ADDRESS}
+	}
+}

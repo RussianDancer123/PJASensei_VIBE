@@ -1,3 +1,10 @@
 spring:
   application:
     name: PJASensei_VIBE
+  config:
+    # The stack provisions the Gitea API token as a file named after its property.
+    import: optional:configtree:/run/pjasensei-secrets/
+  http:
+    clients:
+      connect-timeout: 5s
+      read-timeout: 30s

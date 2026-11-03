@@ -1,9 +1,9 @@
-package com.example.pjasensei_vibe;
+package pl.edu.pjasensei;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import pl.edu.pjasensei.support.IntegrationTest;
 
-@SpringBootTest
+@IntegrationTest
 class PjaSenseiVibeApplicationTests {
 
     @Test

@@ -1,0 +1,4 @@
+@mocks path /plugin-mock /plugin-mock/* /mock-idp /mock-idp/*
+handle @mocks {
+	reverse_proxy {$MOCKS_ADDRESS}
+}

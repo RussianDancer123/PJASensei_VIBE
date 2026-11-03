@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PJASensei</title>
+  <script defer src="/vendor/alpine-3.17.5.min.js"></script>
+</head>
+<body>
+  <h1>PJASensei</h1>
+  <p>Placeholder page, served by the front end.</p>
+  <div x-data="{ status: 'checking' }"
+       x-init="fetch('/api/status').then(r => r.json()).then(s => status = s.status).catch(() => status = 'unreachable')">
+    Spring: <strong x-text="status"></strong>
+  </div>
+</body>
+</html>

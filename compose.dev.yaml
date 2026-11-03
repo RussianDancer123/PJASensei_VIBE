@@ -1,0 +1,18 @@
+# Development only, added by COMPOSE_FILE in .env.example. Never deployed (ADR 0001).
+services:
+  caddy:
+    environment:
+      MOCKS_ADDRESS: ${MOCKS_ADDRESS:?}
+    volumes:
+      - ./docker/caddy/mocks.caddy:/etc/caddy/dev.d/mocks.caddy:ro
+    depends_on: [mocks]
+
+  # The identity provider, AI and IDE plugin mocks share this one container.
+  mocks:
+    image: node:24-alpine
+    command: node /app/server.js
+    environment:
+      PORT: "8090"
+    volumes:
+      - ./mocks:/app:ro
+    networks: [edge]

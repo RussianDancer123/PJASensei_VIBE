@@ -1,0 +1,112 @@
+# The services of ADR 0001. Only Caddy's HTTP port and Gitea's SSH port are published.
+# compose.dev.yaml adds the development mocks, only when the environment file asks for it.
+name: pjasensei
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "${CADDY_HTTP_PORT:?}:80"
+    environment:
+      FRONTEND_ADDRESS: ${FRONTEND_ADDRESS:?}
+      SPRING_ADDRESS: ${SPRING_ADDRESS:?}
+      FRAME_ANCESTORS: ${FRAME_ANCESTORS:?}
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks: [edge]
+    depends_on: [frontend, spring]
+
+  frontend:
+    image: caddy:2-alpine
+    command: caddy file-server --root /srv --listen :80
+    volumes:
+      - ./frontend:/srv:ro
+    networks: [edge]
+
+  spring:
+    build: .
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_ADDRESS:?}/${POSTGRES_DB:?}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?}
+      PJASENSEI_GITEA_URL: ${GITEA_API_URL:?}
+      PJASENSEI_CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS?}
+    volumes:
+      - gitea-api-token:/run/pjasensei-secrets:ro
+    networks: [edge, data, gitea]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gitea-provision:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/status"]
+      interval: 5s
+      timeout: 5s
+      start_period: 60s
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  gitea:
+    image: gitea/gitea:1.27.3
+    env_file: docker/gitea/gitea.env
+    environment:
+      GITEA__server__ROOT_URL: ${GITEA_API_URL:?}
+      GITEA__server__SSH_DOMAIN: ${GITEA_SSH_DOMAIN:?}
+      GITEA__server__SSH_PORT: ${GITEA_SSH_PORT:?}
+    ports:
+      - "${GITEA_SSH_PORT:?}:22"
+    volumes:
+      - gitea-data:/data
+    networks: [gitea]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:3000/api/healthz"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  # Runs once at every start and leaves the token in a volume it shares only with Spring.
+  gitea-provision:
+    image: gitea/gitea:1.27.3
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        chown git:git /run/pjasensei-secrets &&
+        exec su-exec git sh /provision-api-token.sh "$$GITEA_API_URL"
+        /run/pjasensei-secrets/pjasensei.gitea.api-token
+    environment:
+      GITEA_API_URL: ${GITEA_API_URL:?}
+    volumes:
+      - gitea-data:/data
+      - gitea-api-token:/run/pjasensei-secrets
+      - ./docker/gitea/provision-api-token.sh:/provision-api-token.sh:ro
+    networks: [gitea]
+    depends_on:
+      gitea:
+        condition: service_healthy
+
+# Gitea and Postgres sit on networks Caddy is not part of, so only Spring reaches them.
+networks:
+  edge:
+  data:
+    internal: true
+  gitea:
+
+volumes:
+  postgres-data:
+  gitea-data:
+  gitea-api-token:
