@@ -55,6 +55,35 @@ class SendAssignmentApiTest {
     }
 
     @Test
+    void aSourceWithGiteaTemplateInstructionsStillGivesEveryoneTheSameFiles() {
+        var taught = newTaughtClassGroup(2);
+        var source = gitea.newSourceRepository();
+        gitea.addFile(source, ".gitea/template", "*.txt");
+        gitea.addFile(source, "greeting.txt", "${REPO_NAME}");
+
+        var id = sent(taught.instructor(), source.url(), taught.studentSubs());
+
+        for (var student : taught.students()) {
+            assertThat(gitea.fileContent(repositoryName(id, student), "greeting.txt")).isEqualTo("${REPO_NAME}");
+        }
+    }
+
+    @Test
+    void makesTheAccountsOfAStudentAndInstructorThatWentMissingAfterRefresh() {
+        var taught = newTaughtClassGroup(1);
+        var student = taught.students().get(0);
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+        gitea.deleteAccount(student.sub());
+        gitea.deleteAccount(taught.instructor().sub());
+
+        repositoriesWith(taught.instructor().token(), id).expectStatus().isNoContent();
+
+        var name = repositoryName(id, student);
+        assertThat(gitea.permission(name, student.sub())).isEqualTo("write");
+        assertThat(gitea.permission(name, taught.instructor().sub())).isEqualTo("read");
+    }
+
+    @Test
     void theStudentCanWriteAndTheSendingInstructorCanOnlyRead() {
         var taught = newTaughtClassGroup(2);
         var chosen = taught.students().get(0);

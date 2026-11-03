@@ -83,6 +83,16 @@ public final class TestGitea {
         }
     }
 
+    public String fileContent(String repository, String path) {
+        var encoded = api().get()
+                .uri("/api/v1/repos/{owner}/{name}/contents/{path}", serviceAccount(), repository, path)
+                .retrieve()
+                .body(JsonNode.class)
+                .path("content")
+                .asString();
+        return new String(Base64.getMimeDecoder().decode(encoded), StandardCharsets.UTF_8);
+    }
+
     public int commitCount(String repository) {
         return api().get()
                 .uri("/api/v1/repos/{owner}/{name}/commits", serviceAccount(), repository)

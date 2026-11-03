@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -21,6 +22,7 @@ import org.springframework.web.client.RestClientException;
 public class GiteaClient {
 
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String TEMPLATE_INSTRUCTIONS = ".gitea/template";
 
     private final RestClient http;
     private final RestClient importHttp;
@@ -96,7 +98,37 @@ public class GiteaClient {
                 .body(Map.of("template", true))
                 .retrieve()
                 .toBodilessEntity();
+        removeTemplateInstructions(name);
         return name;
+    }
+
+    /**
+     * Gitea would follow this file when making a repository from the snapshot, filling in the name of
+     * each repository, so Students would start from different files.
+     */
+    private void removeTemplateInstructions(String snapshot) {
+        File instructions;
+        try {
+            instructions = http.get()
+                    .uri(
+                            "/api/v1/repos/{owner}/{name}/contents/{path}",
+                            serviceAccount(),
+                            snapshot,
+                            TEMPLATE_INSTRUCTIONS)
+                    .retrieve()
+                    .body(File.class);
+        } catch (HttpClientErrorException.NotFound e) {
+            return;
+        }
+        http.method(HttpMethod.DELETE)
+                .uri(
+                        "/api/v1/repos/{owner}/{name}/contents/{path}",
+                        serviceAccount(),
+                        snapshot,
+                        TEMPLATE_INSTRUCTIONS)
+                .body(Map.of("sha", instructions.sha()))
+                .retrieve()
+                .toBodilessEntity();
     }
 
     /**
@@ -143,6 +175,8 @@ public class GiteaClient {
     }
 
     private record Account(String login) {}
+
+    private record File(String sha) {}
 
     private record Repository(@JsonProperty("ssh_url") String sshUrl) {}
 

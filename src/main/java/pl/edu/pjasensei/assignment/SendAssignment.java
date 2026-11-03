@@ -87,6 +87,8 @@ class SendAssignment {
                 .orElseThrow(() -> new AssignmentRefused(HttpStatus.NOT_FOUND, "You sent no such Assignment."));
         for (var recipient : store.recipientsWithoutRepository(assignment)) {
             String name = "assignment-%d-%s".formatted(assignment, recipient.studentNumber());
+            gitea.ensureAccount(recipient.sub());
+            gitea.ensureAccount(instructorSub);
             String sshUrl = gitea.createFromSnapshot(snapshot, name);
             gitea.grantWrite(name, recipient.sub());
             gitea.grantRead(name, instructorSub);
