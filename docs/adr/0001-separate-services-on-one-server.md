@@ -1,3 +1,5 @@
 # Separate services on one server, with Gitea hidden behind Spring
 
 The client requires everything to run on a single server, but the front end, the AI service, Spring, Gitea and the database stay separate services that know each other only through addresses in environment variables, so any of them can be replaced or moved without code changes. Gitea is logically part of Spring: only its SSH port is exposed, for ordinary `git` in the IDE, while its API and web UI are reachable by Spring alone, and any Gitea accounts are technical ones that only Spring controls. A Caddy reverse proxy is the single entry point. The local mocks (identity provider, AI, IDE plugin) may share one container, because they stand in for separate systems only through their APIs and are never deployed.
+
+Two deliberate startup exceptions: the one-off `gitea-provision` job also calls the Gitea API, to create the admin account and the token for Spring, and that token reaches Spring through a shared read-only volume rather than an environment variable, so the Spring image uses the same uid as the Gitea `git` user.
