@@ -8,3 +8,9 @@ spring:
     clients:
       connect-timeout: 5s
       read-timeout: 30s
+
+pjasensei:
+  identity:
+    # A group must match as a whole, so 17w gives Instructor and 17c gives Student.
+    instructor-group-pattern: '\d+w'
+    class-group-pattern: '\d+c'

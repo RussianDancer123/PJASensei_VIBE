@@ -7,6 +7,12 @@
 	# Development routes, present only when compose.dev.yaml mounts them.
 	import /etc/caddy/dev.d/*.caddy
 
+	# The front end is static files, so the settings it needs for sign-in reach it from here.
+	handle /config.json {
+		header Content-Type application/json
+		respond `{"issuer":"{$IDENTITY_ISSUER}","clientId":"{$IDENTITY_CLIENT_ID}"}`
+	}
+
 	@api path /api /api/*
 	handle @api {
 		reverse_proxy {$SPRING_ADDRESS}

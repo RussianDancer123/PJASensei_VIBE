@@ -13,6 +13,8 @@ services:
     command: node /app/server.js
     environment:
       PORT: "8090"
+      IDENTITY_ISSUER: ${IDENTITY_ISSUER:?}
+      IDENTITY_CLIENT_ID: ${IDENTITY_CLIENT_ID:?}
     volumes:
       - ./mocks:/app:ro
     networks: [edge]

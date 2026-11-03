@@ -4,11 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PJASensei</title>
+  <script defer src="/app.js"></script>
   <script defer src="/vendor/alpine-3.17.5.min.js"></script>
 </head>
 <body>
   <h1>PJASensei</h1>
-  <p>Placeholder page, served by the front end.</p>
+
+  <div x-data="session">
+    <p x-show="error" role="alert" x-text="error"></p>
+    <template x-if="me">
+      <div>
+        <p>Signed in as <strong x-text="me.username"></strong></p>
+        <p>Roles: <strong x-text="me.roles.join(', ') || 'none'"></strong></p>
+        <button @click="signOut">Sign out</button>
+      </div>
+    </template>
+    <button x-show="!me && !loading" @click="signIn">Sign in</button>
+  </div>
+
   <div x-data="{ status: 'checking' }"
        x-init="fetch('/api/status').then(r => r.json()).then(s => status = s.status).catch(() => status = 'unreachable')">
     Spring: <strong x-text="status"></strong>

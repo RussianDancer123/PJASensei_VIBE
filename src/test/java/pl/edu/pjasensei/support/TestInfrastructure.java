@@ -8,7 +8,7 @@ import org.springframework.test.context.DynamicPropertyRegistrar;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * The real services Spring runs against. One set of containers is shared by every test context in
+ * The real services Spring runs against. One set of them is shared by every test context in
  * the JVM. Images match compose.yaml.
  */
 @TestConfiguration(proxyBeanMethods = false)
@@ -18,6 +18,7 @@ class TestInfrastructure {
 
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18-alpine");
     private static final GiteaContainer GITEA = new GiteaContainer("gitea/gitea:1.27.3");
+    private static final TestIdentityProvider IDENTITY_PROVIDER = new TestIdentityProvider();
 
     @Bean
     @ServiceConnection
@@ -28,6 +29,20 @@ class TestInfrastructure {
     @Bean
     GiteaContainer gitea() {
         return GITEA;
+    }
+
+    @Bean
+    TestIdentityProvider identityProvider() {
+        return IDENTITY_PROVIDER;
+    }
+
+    @Bean
+    DynamicPropertyRegistrar identityProperties(TestIdentityProvider identityProvider) {
+        return registry -> {
+            registry.add("pjasensei.identity.issuer", () -> TestIdentityProvider.ISSUER);
+            registry.add("pjasensei.identity.jwk-set-uri", identityProvider::jwkSetUri);
+            registry.add("pjasensei.identity.client-id", () -> TestIdentityProvider.CLIENT_ID);
+        };
     }
 
     @Bean
