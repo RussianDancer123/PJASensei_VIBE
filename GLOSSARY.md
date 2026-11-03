@@ -19,7 +19,7 @@ The stable, university-issued identifier of a Student (the `s12345` in `s12345@m
 _Avoid_: Login, username, s-ka
 
 **ClassGroup**:
-A set of Students taught together, used to find and select Students. Membership comes from the identity provider, where Students of group `17c` are taught by Instructors of the paired group `17w`. A ClassGroup with no members does not appear anywhere. Work never belongs to a ClassGroup, so changing or removing one affects no Assignment.
+A set of Students taught together, used to find and select Students. Membership comes from the identity provider, where Students of group `17c` are taught by Instructors of the paired group `17w`. A ClassGroup with no members is not shown to an Instructor. Work never belongs to a ClassGroup, so changing or removing one affects no Assignment.
 _Avoid_: Group, class, team
 
 ### Work

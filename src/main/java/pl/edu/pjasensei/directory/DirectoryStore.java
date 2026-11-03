@@ -28,9 +28,9 @@ public class DirectoryStore {
                 .update();
     }
 
-    boolean isSaved(String studentSub) {
+    boolean isStudentSaved(String sub) {
         return jdbc.sql("SELECT EXISTS (SELECT 1 FROM students WHERE sub = ?)")
-                .param(studentSub)
+                .param(sub)
                 .query(Boolean.class)
                 .single();
     }

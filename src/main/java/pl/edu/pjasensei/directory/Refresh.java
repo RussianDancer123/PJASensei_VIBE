@@ -114,7 +114,7 @@ class Refresh {
             return false;
         }
         try {
-            if (store.isSaved(member.sub())) {
+            if (store.isStudentSaved(member.sub())) {
                 return true;
             }
             if (!isUsable(member.email())) {

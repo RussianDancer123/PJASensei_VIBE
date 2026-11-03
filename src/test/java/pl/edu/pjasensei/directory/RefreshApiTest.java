@@ -355,16 +355,15 @@ class RefreshApiTest {
         var student = newStudent();
         cognito.setGroup(emptied + "c", List.of(student));
         cognito.setGroup(kept + "c", List.of(student));
-        var token = instructorRefreshed(emptied + "w", kept + "w");
-        assertThat(studentNumbersIn(token, 0)).containsExactly(student.username());
-        assertThat(studentNumbersIn(token, 1)).containsExactly(student.username());
+        // Separate Instructors, so that refreshing the emptied ClassGroup does not also restore the other.
+        var emptiedToken = instructorRefreshed(emptied + "w");
+        var keptToken = instructorRefreshed(kept + "w");
 
         cognito.setGroup(emptied + "c");
-        refreshWith(token).expectStatus().isOk();
+        refreshWith(emptiedToken).expectStatus().isOk();
 
-        classGroupsWith(token).expectStatus().isOk().expectBody()
-                .jsonPath("$.classGroups[*].name").isEqualTo(List.of(kept + "c"));
-        assertThat(studentNumbersIn(token, 0)).containsExactly(student.username());
+        classGroupsWith(emptiedToken).expectStatus().isOk().expectBody().jsonPath("$.classGroups").isEmpty();
+        assertThat(studentNumbersIn(keptToken, 0)).containsExactly(student.username());
     }
 
     @Test
