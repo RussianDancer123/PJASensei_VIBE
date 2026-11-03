@@ -40,12 +40,17 @@ class DirectoryStore {
                 .update();
     }
 
-    /** All at once, so a reader sees the old members or the new ones. */
+    /**
+     * All at once, so a reader sees the old members or the new ones. Another Instructor of the same
+     * ClassGroup may be refreshing it at this moment, so replacements of one ClassGroup take turns:
+     * otherwise both sets of members would survive.
+     */
     void replaceMembers(String classGroup, Collection<String> studentSubs) {
         transaction.executeWithoutResult(status -> {
+            jdbc.sql("SELECT pg_advisory_xact_lock(hashtext(?))").param(classGroup).query(Object.class).single();
             jdbc.sql("DELETE FROM class_group_members WHERE class_group = ?").param(classGroup).update();
             for (String sub : studentSubs) {
-                // Another Instructor of the same ClassGroup may be refreshing it at this moment.
+                // Result pages may repeat a person if the group changes while it is being read.
                 jdbc.sql("""
                                 INSERT INTO class_group_members (class_group, student_sub) VALUES (?, ?)
                                 ON CONFLICT DO NOTHING

@@ -6,6 +6,8 @@ import com.jayway.jsonpath.JsonPath;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
@@ -36,6 +38,9 @@ class RefreshApiTest {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    DirectoryStore store;
 
     @Test
     void addsAFirstTimeInstructorWithTheirEmailFromCognito() {
@@ -305,6 +310,104 @@ class RefreshApiTest {
 
         assertThat(studentNumbersIn(token, 0)).containsExactlyInAnyOrder("s" + number, other.username());
         assertThat(gitea.accountExists(other.sub())).isTrue();
+    }
+
+    @Test
+    void aStudentTheDatabaseRejectsIsListedWithEarlierFailuresAndEveryoneElseIsKept() {
+        int number = cognito.newGroupNumber();
+        var noEmail = new Member("no-email-" + UUID.randomUUID(), UUID.randomUUID().toString(), null);
+        var rejected = newStudent();
+        var kept = newStudent();
+        cognito.setGroup(number + "c", List.of(noEmail, rejected, kept));
+        var token = instructorOf(number + "w");
+
+        whileDatabaseRejects("students", "sub <> '%s'".formatted(rejected.sub()), () ->
+                refreshWith(token).expectStatus().isOk().expectBody()
+                        .jsonPath("$.failures[*].person").isEqualTo(List.of(noEmail.username(), rejected.username())));
+
+        assertThat(studentNumbersIn(token, 0)).containsExactly(kept.username());
+    }
+
+    @Test
+    void aMembershipTheDatabaseRejectsIsListedAndKeepsItsPreviousMembersWhileOthersSucceed() {
+        int rejected = cognito.newGroupNumber();
+        int other = cognito.newGroupNumber();
+        var previous = newStudent();
+        var token = instructorOf(rejected + "w", other + "w");
+        cognito.setGroup(rejected + "c", List.of(previous));
+        cognito.setGroup(other + "c");
+        refreshWith(token).expectStatus().isOk();
+        var otherStudent = newStudent();
+        cognito.setGroup(rejected + "c", List.of(newStudent()));
+        cognito.setGroup(other + "c", List.of(otherStudent));
+
+        whileDatabaseRejects("class_group_members", "class_group <> '%sc'".formatted(rejected), () ->
+                refreshWith(token).expectStatus().isOk().expectBody()
+                        .jsonPath("$.failures[*].classGroup").isEqualTo(List.of(rejected + "c")));
+
+        assertThat(store.studentsOf(rejected + "c")).extracting(DirectoryStore.Student::sub)
+                .containsExactly(previous.sub());
+        assertThat(store.studentsOf(other + "c")).extracting(DirectoryStore.Student::sub)
+                .containsExactly(otherStudent.sub());
+    }
+
+    @Test
+    void anInstructorTheDatabaseRejectsIsListedAndTheirClassGroupsAreStillRefreshed() {
+        int number = cognito.newGroupNumber();
+        var student = newStudent();
+        cognito.setGroup(number + "c", List.of(student));
+        var sub = UUID.randomUUID().toString();
+        var username = "instructor-" + sub;
+        cognito.addUser(new Member(username, sub, username + "@mail.com"));
+        var token = instructorToken(sub, username, number + "w");
+
+        whileDatabaseRejects("instructors", "sub <> '%s'".formatted(sub), () ->
+                refreshWith(token).expectStatus().isOk().expectBody()
+                        .jsonPath("$.failures[*].person").isEqualTo(List.of(username)));
+
+        assertThat(store.studentsOf(number + "c")).extracting(DirectoryStore.Student::sub)
+                .containsExactly(student.sub());
+    }
+
+    @Test
+    void simultaneousReplacementsOfAClassGroupLeaveOneOfThemAndNotBoth() throws Exception {
+        var classGroup = cognito.newGroupNumber() + "c";
+        var first = savedStudent();
+        var second = savedStudent();
+        try (var threads = Executors.newFixedThreadPool(2)) {
+            for (int round = 0; round < 100; round++) {
+                var start = new CyclicBarrier(2);
+                var one = threads.submit(() -> replaceAfter(start, classGroup, first));
+                var other = threads.submit(() -> replaceAfter(start, classGroup, second));
+                one.get();
+                other.get();
+
+                assertThat(store.studentsOf(classGroup)).hasSize(1);
+            }
+        }
+    }
+
+    private Void replaceAfter(CyclicBarrier start, String classGroup, String sub) throws Exception {
+        start.await();
+        store.replaceMembers(classGroup, List.of(sub));
+        return null;
+    }
+
+    private String savedStudent() {
+        var student = newStudent();
+        store.saveStudent(student.sub(), student.email(), student.username());
+        return student.sub();
+    }
+
+    /** Provokes a database error that is not a Student Number clash, for this test's rows only. */
+    private void whileDatabaseRejects(String table, String allowed, Runnable action) {
+        var constraint = "reject_" + UUID.randomUUID().toString().replace("-", "");
+        jdbc.sql("ALTER TABLE %s ADD CONSTRAINT %s CHECK (%s) NOT VALID".formatted(table, constraint, allowed)).update();
+        try {
+            action.run();
+        } finally {
+            jdbc.sql("ALTER TABLE %s DROP CONSTRAINT %s".formatted(table, constraint)).update();
+        }
     }
 
     private String instructorRefreshed(String... groups) {

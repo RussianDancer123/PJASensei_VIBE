@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
@@ -28,6 +29,7 @@ class Refresh {
     private static final Pattern USABLE_EMAIL = Pattern.compile("[^@\\s]+@[^@\\s]+");
     private static final String UNREADABLE = "Could not read from the identity provider.";
     private static final String NO_USABLE_EMAIL = "No usable email address.";
+    private static final String NOT_SAVED = "Could not save to the database.";
 
     private final CognitoDirectory directory;
     private final DirectoryStore store;
@@ -59,7 +61,13 @@ class Refresh {
             failures.add(new Failure(null, caller.username(), NO_USABLE_EMAIL));
             return;
         }
-        store.saveInstructor(caller.sub(), email);
+        try {
+            store.saveInstructor(caller.sub(), email);
+        } catch (DataAccessException e) {
+            log.warn("Could not save Instructor {}", caller.username(), e);
+            failures.add(new Failure(null, caller.username(), NOT_SAVED));
+            return;
+        }
         ensureGiteaAccount(caller.sub(), null, caller.username(), failures);
     }
 
@@ -79,7 +87,13 @@ class Refresh {
                 students.add(member);
             }
         }
-        store.replaceMembers(classGroup, students.stream().map(CognitoDirectory.Member::sub).toList());
+        try {
+            store.replaceMembers(classGroup, students.stream().map(CognitoDirectory.Member::sub).toList());
+        } catch (DataAccessException e) {
+            log.warn("Could not save the members of ClassGroup {}", classGroup, e);
+            failures.add(new Failure(classGroup, null, NOT_SAVED));
+            return;
+        }
         students.forEach(student -> ensureGiteaAccount(student.sub(), classGroup, student.username(), failures));
     }
 
@@ -110,6 +124,10 @@ class Refresh {
                     classGroup,
                     member.username(),
                     "Student Number %s belongs to someone else.".formatted(member.studentNumber())));
+            return false;
+        } catch (DataAccessException e) {
+            log.warn("Could not save Student {}", member.username(), e);
+            failures.add(new Failure(classGroup, member.username(), NOT_SAVED));
             return false;
         }
     }
