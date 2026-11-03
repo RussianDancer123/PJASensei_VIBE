@@ -53,9 +53,9 @@ Spring accepts any token the configured provider signed for the configured clien
 
 ## Refresh
 
-An Instructor's **Refresh** button (`POST /api/refresh`) is the only thing that pulls data from the identity provider. It needs a valid token with an Instructor group, not a row in the database, and it adds the caller to the database. For each Instructor group in the token, such as `17w`, it reads the paired ClassGroup, `17c`, and replaces that group's members, then makes any missing technical Gitea account. The response lists everything that failed, in `failures`, and everything else is kept. `GET /api/class-groups` then shows the ClassGroups the caller teaches.
+An Instructor's **Refresh** button (`POST /api/refresh`) is the only thing that pulls data from the identity provider. It needs a valid token with an Instructor group, not a row in the database, and it adds the caller to the database. For each Instructor group in the token, such as `17w`, it reads the paired ClassGroup, `17c`, and replaces that ClassGroup's members, then makes any missing technical Gitea account. The response lists everything that failed, in `failures`, and everything else is kept. `GET /api/class-groups` then shows the ClassGroups the caller teaches.
 
-Two seeded cases show failures on purpose. Refresh as `anowak` lists `s18003`, who has no email. Refresh as `s20001` lists `20c`, a group nobody belongs to and which therefore does not exist in the mock.
+Two seeded cases show failures on purpose. Refresh as `anowak` lists `s18003`, who has no email. Refresh as `s20001` lists `20c`, a ClassGroup nobody belongs to and which therefore does not exist in the mock.
 
 ## Switch to real Cognito
 

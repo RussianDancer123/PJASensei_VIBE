@@ -45,7 +45,7 @@ class DirectoryStore {
         transaction.executeWithoutResult(status -> {
             jdbc.sql("DELETE FROM class_group_members WHERE class_group = ?").param(classGroup).update();
             for (String sub : studentSubs) {
-                // Another Instructor of the same group may be refreshing it at this moment.
+                // Another Instructor of the same ClassGroup may be refreshing it at this moment.
                 jdbc.sql("""
                                 INSERT INTO class_group_members (class_group, student_sub) VALUES (?, ?)
                                 ON CONFLICT DO NOTHING
@@ -56,7 +56,7 @@ class DirectoryStore {
         });
     }
 
-    List<StudentRow> studentsOf(String classGroup) {
+    List<Student> studentsOf(String classGroup) {
         return jdbc.sql("""
                         SELECT s.sub, s.email, s.student_number
                         FROM class_group_members m JOIN students s ON s.sub = m.student_sub
@@ -64,9 +64,9 @@ class DirectoryStore {
                         ORDER BY s.student_number
                         """)
                 .param(classGroup)
-                .query(StudentRow.class)
+                .query(Student.class)
                 .list();
     }
 
-    record StudentRow(String sub, String email, String studentNumber) {}
+    record Student(String sub, String email, String studentNumber) {}
 }

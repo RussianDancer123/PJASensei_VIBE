@@ -45,10 +45,7 @@ class RefreshApiTest {
         var username = "instructor-" + sub;
         cognito.addUser(new Member(username, sub, "jan.kowalski@mail.com"));
 
-        var token = identityProvider.token(claims -> claims
-                .subject(sub)
-                .claim("username", username)
-                .claim("cognito:groups", List.of(number + "w")));
+        var token = instructorToken(sub, username, number + "w");
 
         refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
 
@@ -153,7 +150,7 @@ class RefreshApiTest {
     }
 
     @Test
-    void aGroupThatFailsPartWayKeepsItsPreviousMembersWhileOtherGroupsSucceed() {
+    void aClassGroupThatFailsPartWayKeepsItsPreviousMembersWhileOthersSucceed() {
         int failing = cognito.newGroupNumber();
         int working = cognito.newGroupNumber();
         var previous = newStudent();
@@ -194,7 +191,7 @@ class RefreshApiTest {
 
     @ParameterizedTest
     @NullSource
-    @ValueSource(strings = {"", "   ", "no-at-sign", "@mail.com", "s12345@", "a@b@mail.com", "s 12345@mail.com"})
+    @ValueSource(strings = {"", "   ", "no-at-sign", "@mail.com", "s12345@", "a@b@mail.com", "s 12345@mail.com", "s\t12345@mail.com", "s12345@mail.com\n"})
     void aPersonWithoutAUsableEmailIsSkippedAndListed(String email) {
         int number = cognito.newGroupNumber();
         var good = newStudent();
@@ -236,10 +233,7 @@ class RefreshApiTest {
         var sub = UUID.randomUUID().toString();
         var username = "instructor-" + sub;
         cognito.addUser(new Member(username, sub, null));
-        var token = identityProvider.token(claims -> claims
-                .subject(sub)
-                .claim("username", username)
-                .claim("cognito:groups", List.of(number + "w")));
+        var token = instructorToken(sub, username, number + "w");
 
         refreshWith(token).expectStatus().isOk().expectBody()
                 .jsonPath("$.failures.length()").isEqualTo(1)
@@ -272,10 +266,7 @@ class RefreshApiTest {
         var instructorSub = UUID.randomUUID().toString();
         var username = "instructor-" + instructorSub;
         cognito.addUser(new Member(username, instructorSub, username + "@mail.com"));
-        var token = identityProvider.token(claims -> claims
-                .subject(instructorSub)
-                .claim("username", username)
-                .claim("cognito:groups", List.of(number + "w")));
+        var token = instructorToken(instructorSub, username, number + "w");
 
         refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
 
@@ -326,6 +317,10 @@ class RefreshApiTest {
         var sub = UUID.randomUUID().toString();
         var username = "instructor-" + sub;
         cognito.addUser(new Member(username, sub, username + "@mail.com"));
+        return instructorToken(sub, username, groups);
+    }
+
+    private String instructorToken(String sub, String username, String... groups) {
         return identityProvider.token(claims -> claims
                 .subject(sub)
                 .claim("username", username)

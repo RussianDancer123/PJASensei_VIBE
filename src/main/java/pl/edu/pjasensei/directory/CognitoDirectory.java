@@ -49,5 +49,11 @@ class CognitoDirectory {
     }
 
     /** {@code sub} and {@code email} are null when the identity provider has none. */
-    record Member(String username, String sub, String email) {}
+    record Member(String username, String sub, String email) {
+
+        /** The local part of the email, as in s12345@mail.com. The email has to be usable. */
+        String studentNumber() {
+            return email.substring(0, email.indexOf('@'));
+        }
+    }
 }

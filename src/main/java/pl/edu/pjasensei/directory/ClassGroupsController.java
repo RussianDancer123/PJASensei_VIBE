@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import pl.edu.pjasensei.identity.TaughtClassGroups;
 
-/** The ClassGroups the caller teaches, from what the last Refresh stored. No other group appears. */
+/** The ClassGroups the caller teaches, from what the last Refresh stored. No other one appears. */
 @RestController
 class ClassGroupsController {
 
@@ -27,5 +27,5 @@ class ClassGroupsController {
 
     record ClassGroupsResponse(List<ClassGroup> classGroups) {}
 
-    record ClassGroup(String name, List<DirectoryStore.StudentRow> students) {}
+    record ClassGroup(String name, List<DirectoryStore.Student> students) {}
 }

@@ -14,8 +14,8 @@ import software.amazon.awssdk.core.exception.SdkException;
 
 /**
  * Pulls people from the identity provider: the only thing that does. Everything that succeeds is
- * kept and everything that fails is listed in the result, so one bad person or group costs nothing
- * else.
+ * kept and everything that fails is listed in the result, so one bad person or ClassGroup costs
+ * nothing else.
  *
  * <p>For now only an Instructor's button triggers this. It may later run nightly, around 01:00 or
  * 02:00, aligned with the updates of the university system.
@@ -25,7 +25,7 @@ class Refresh {
 
     private static final Logger log = LoggerFactory.getLogger(Refresh.class);
 
-    private static final Pattern USABLE_EMAIL = Pattern.compile("[^@\s]+@[^@\s]+");
+    private static final Pattern USABLE_EMAIL = Pattern.compile("[^@\\s]+@[^@\\s]+");
     private static final String UNREADABLE = "Could not read from the identity provider.";
     private static final String NO_USABLE_EMAIL = "No usable email address.";
 
@@ -102,13 +102,14 @@ class Refresh {
             failures.add(new Failure(classGroup, member.username(), "The identity provider gave no sub."));
             return false;
         }
-        String studentNumber = member.email().substring(0, member.email().indexOf('@'));
         try {
-            store.saveStudent(member.sub(), member.email(), studentNumber);
+            store.saveStudent(member.sub(), member.email(), member.studentNumber());
             return true;
         } catch (DuplicateKeyException e) {
             failures.add(new Failure(
-                    classGroup, member.username(), "Student Number %s belongs to someone else.".formatted(studentNumber)));
+                    classGroup,
+                    member.username(),
+                    "Student Number %s belongs to someone else.".formatted(member.studentNumber())));
             return false;
         }
     }
