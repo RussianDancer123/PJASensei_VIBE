@@ -29,13 +29,13 @@ document.addEventListener("alpine:init", () => {
       return classGroup.students.filter((student) => student.studentNumber.toLowerCase().includes(search));
     },
 
-    isWholeGroupSelected(classGroup) {
+    isWholeClassGroupSelected(classGroup) {
       return classGroup.students.length > 0
         && classGroup.students.every((student) => this.selected.includes(student.sub));
     },
 
     // A Student may be in several ClassGroups, so selection is kept per Student.
-    selectWholeGroup(classGroup, chosen) {
+    selectWholeClassGroup(classGroup, chosen) {
       const subs = classGroup.students.map((student) => student.sub);
       const others = this.selected.filter((sub) => !subs.includes(sub));
       this.selected = chosen ? [...others, ...subs] : others;
@@ -57,16 +57,19 @@ document.addEventListener("alpine:init", () => {
         }
         const { id } = await created.json();
 
-        this.sendStep = "creating";
-        const repositories = await callApi(`/api/assignments/${id}/repositories`, { method: "POST" });
-        if (!repositories.ok) {
-          throw new Error(await reasonFrom(repositories));
-        }
-
-        this.sentMessage = `Sent "${this.title}" to ${this.selected.length} Student(s).`;
+        // The Assignment exists now, so sending the form again would make a second one.
+        const sent = `"${this.title}" to ${this.selected.length} Student(s)`;
         this.title = "";
         this.sourceUrl = "";
         this.selected = [];
+
+        this.sendStep = "creating";
+        const repositories = await callApi(`/api/assignments/${id}/repositories`, { method: "POST" });
+        if (!repositories.ok) {
+          throw new Error(`The repository was copied, but sending ${sent} did not finish. ${await reasonFrom(repositories)}`);
+        }
+
+        this.sentMessage = `Sent ${sent}.`;
       } catch (error) {
         this.sendError = error.message;
       } finally {
@@ -122,6 +125,9 @@ document.addEventListener("alpine:init", () => {
         }
         this.refreshFailures = (await response.json()).failures;
         this.classGroups = await fetchClassGroups();
+        // Someone who has left no longer shows, so they could not be unticked.
+        const present = this.classGroups.flatMap((classGroup) => classGroup.students.map((student) => student.sub));
+        this.selected = this.selected.filter((sub) => present.includes(sub));
       } catch (error) {
         this.error = error.message;
       } finally {
