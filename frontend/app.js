@@ -30,8 +30,7 @@ document.addEventListener("alpine:init", () => {
     },
 
     isWholeClassGroupSelected(classGroup) {
-      return classGroup.students.length > 0
-        && classGroup.students.every((student) => this.selected.includes(student.sub));
+      return classGroup.students.every((student) => this.selected.includes(student.sub));
     },
 
     // A Student may be in several ClassGroups, so selection is kept per Student.

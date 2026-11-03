@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import pl.edu.pjasensei.identity.TaughtClassGroups;
 
-/** The ClassGroups the caller teaches, from what the last Refresh stored. No other one appears. */
+/** The ClassGroups the caller teaches that have members, from what the last Refresh stored. */
 @RestController
 class ClassGroupsController {
 
@@ -22,6 +22,7 @@ class ClassGroupsController {
     ClassGroupsResponse classGroups(JwtAuthenticationToken authentication) {
         return new ClassGroupsResponse(taughtClassGroups.of(authentication.getToken()).stream()
                 .map(name -> new ClassGroup(name, store.studentsOf(name)))
+                .filter(classGroup -> !classGroup.students().isEmpty())
                 .toList());
     }
 

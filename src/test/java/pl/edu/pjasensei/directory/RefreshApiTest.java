@@ -82,7 +82,8 @@ class RefreshApiTest {
         int taught = cognito.newGroupNumber();
         int other = cognito.newGroupNumber();
         var outsider = newStudent();
-        cognito.setGroup(taught + "c");
+        var taughtStudent = newStudent();
+        cognito.setGroup(taught + "c", List.of(taughtStudent));
         cognito.setGroup(other + "c", List.of(outsider));
         refreshWith(instructorOf(other + "w")).expectStatus().isOk();
         int timesOtherWasRead = Collections.frequency(cognito.requestedGroups(), other + "c");
@@ -93,8 +94,8 @@ class RefreshApiTest {
         assertThat(Collections.frequency(cognito.requestedGroups(), other + "c")).isEqualTo(timesOtherWasRead);
         assertThat(cognito.requestedGroups()).contains(taught + "c");
         classGroupsWith(token).expectStatus().isOk().expectBody()
-                .jsonPath("$.classGroups[*].name").isEqualTo(List.of(taught + "c"))
-                .jsonPath("$.classGroups[0].students").isEmpty();
+                .jsonPath("$.classGroups[*].name").isEqualTo(List.of(taught + "c"));
+        assertThat(studentNumbersIn(token, 0)).containsExactly(taughtStudent.username());
     }
 
     @Test
@@ -189,9 +190,7 @@ class RefreshApiTest {
         refreshWith(token).expectStatus().isOk().expectBody()
                 .jsonPath("$.failures[0].classGroup").isEqualTo(number + "c");
 
-        classGroupsWith(token).expectStatus().isOk().expectBody()
-                .jsonPath("$.classGroups[0].name").isEqualTo(number + "c")
-                .jsonPath("$.classGroups[0].students").isEmpty();
+        classGroupsWith(token).expectStatus().isOk().expectBody().jsonPath("$.classGroups").isEmpty();
     }
 
     @ParameterizedTest
@@ -228,6 +227,144 @@ class RefreshApiTest {
                 .jsonPath("$.failures[0].person").isEqualTo(clashing.username());
 
         assertThat(studentNumbersIn(token, 0)).containsExactlyInAnyOrder(holder.username(), other.username());
+    }
+
+    @Test
+    void aSavedStudentKeepsTheirEmailAndStudentNumberWhenCognitoGivesADifferentEmail() {
+        int number = cognito.newGroupNumber();
+        var student = newStudent();
+        cognito.setGroup(number + "c", List.of(student));
+        var token = instructorRefreshed(number + "w");
+
+        cognito.setGroup(number + "c", List.of(withEmail(student, "changed-" + UUID.randomUUID() + "@other.com")));
+
+        refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
+        assertIsShownUnchanged(token, student);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "no-at-sign"})
+    void aSavedStudentWhoseEmailIsNowUnusableStaysInTheirClassGroupWithNoFailureListed(String email) {
+        int number = cognito.newGroupNumber();
+        var student = newStudent();
+        cognito.setGroup(number + "c", List.of(student));
+        var token = instructorRefreshed(number + "w");
+
+        cognito.setGroup(number + "c", List.of(withEmail(student, email)));
+
+        refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
+        assertIsShownUnchanged(token, student);
+    }
+
+    @Test
+    void aSavedStudentWhoseNewEmailGivesTheStudentNumberOfSomeoneElseDoesNotClash() {
+        int number = cognito.newGroupNumber();
+        var holder = newStudent();
+        var student = newStudent();
+        cognito.setGroup(number + "c", List.of(holder, student));
+        var token = instructorRefreshed(number + "w");
+
+        cognito.setGroup(number + "c", List.of(holder, withEmail(student, holder.username() + "@other.com")));
+
+        refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
+        assertIsShownUnchanged(token, student);
+        assertIsShownUnchanged(token, holder);
+    }
+
+    @Test
+    void aStudentWhoLeavesEveryClassGroupStaysInTheDatabaseUnchanged() {
+        int number = cognito.newGroupNumber();
+        var student = newStudent();
+        var other = newStudent();
+        cognito.setGroup(number + "c", List.of(student, other));
+        var token = instructorRefreshed(number + "w");
+
+        cognito.setGroup(number + "c", List.of(other));
+        refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
+        assertThat(studentNumbersIn(token, 0)).containsExactly(other.username());
+
+        // Coming back with another email shows the saved Student was there all along.
+        cognito.setGroup(number + "c", List.of(other, withEmail(student, "back-" + UUID.randomUUID() + "@other.com")));
+        refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
+        assertIsShownUnchanged(token, student);
+    }
+
+    @Test
+    void aSavedStudentWithoutAUsableEmailStillGetsAMissingGiteaAccount() {
+        int number = cognito.newGroupNumber();
+        var student = newStudent();
+        cognito.setGroup(number + "c", List.of(student));
+        var token = instructorRefreshed(number + "w");
+        gitea.deleteAccount(student.sub());
+
+        cognito.setGroup(number + "c", List.of(withEmail(student, null)));
+        refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
+
+        assertThat(gitea.accountExists(student.sub())).isTrue();
+    }
+
+    @Test
+    void aSavedInstructorStillGetsTheirEmailFromCognito() {
+        int number = cognito.newGroupNumber();
+        cognito.setGroup(number + "c");
+        var sub = UUID.randomUUID().toString();
+        var username = "instructor-" + sub;
+        cognito.addUser(new Member(username, sub, username + "@mail.com"));
+        var token = instructorToken(sub, username, number + "w");
+        refreshWith(token).expectStatus().isOk();
+
+        cognito.addUser(new Member(username, sub, "changed-" + username + "@mail.com"));
+        refreshWith(token).expectStatus().isOk();
+
+        assertThat(jdbc.sql("SELECT email FROM instructors WHERE sub = ?").param(sub).query(String.class).single())
+                .isEqualTo("changed-" + username + "@mail.com");
+    }
+
+    @Test
+    void aClassGroupWhoseLastMemberLeftDisappearsWhileOthersRemain() {
+        int emptied = cognito.newGroupNumber();
+        int other = cognito.newGroupNumber();
+        var leaver = newStudent();
+        var stayer = newStudent();
+        cognito.setGroup(emptied + "c", List.of(leaver));
+        cognito.setGroup(other + "c", List.of(stayer));
+        var token = instructorRefreshed(emptied + "w", other + "w");
+
+        cognito.setGroup(emptied + "c");
+
+        refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
+        classGroupsWith(token).expectStatus().isOk().expectBody()
+                .jsonPath("$.classGroups[*].name").isEqualTo(List.of(other + "c"));
+        assertThat(studentNumbersIn(token, 0)).containsExactly(stayer.username());
+    }
+
+    @Test
+    void aClassGroupThatNeverHadMembersDoesNotAppear() {
+        int number = cognito.newGroupNumber();
+        cognito.setGroup(number + "c");
+        var token = instructorRefreshed(number + "w");
+
+        classGroupsWith(token).expectStatus().isOk().expectBody().jsonPath("$.classGroups").isEmpty();
+    }
+
+    @Test
+    void aStudentInSeveralClassGroupsKeepsTheOthersWhenOneIsEmptied() {
+        int emptied = cognito.newGroupNumber();
+        int kept = cognito.newGroupNumber();
+        var student = newStudent();
+        cognito.setGroup(emptied + "c", List.of(student));
+        cognito.setGroup(kept + "c", List.of(student));
+        var token = instructorRefreshed(emptied + "w", kept + "w");
+        assertThat(studentNumbersIn(token, 0)).containsExactly(student.username());
+        assertThat(studentNumbersIn(token, 1)).containsExactly(student.username());
+
+        cognito.setGroup(emptied + "c");
+        refreshWith(token).expectStatus().isOk();
+
+        classGroupsWith(token).expectStatus().isOk().expectBody()
+                .jsonPath("$.classGroups[*].name").isEqualTo(List.of(kept + "c"));
+        assertThat(studentNumbersIn(token, 0)).containsExactly(student.username());
     }
 
     @Test
@@ -395,7 +532,7 @@ class RefreshApiTest {
 
     private String savedStudent() {
         var student = newStudent();
-        store.saveStudent(student.sub(), student.email(), student.username());
+        store.addStudent(student.sub(), student.email(), student.username());
         return student.sub();
     }
 
@@ -428,6 +565,19 @@ class RefreshApiTest {
                 .subject(sub)
                 .claim("username", username)
                 .claim("cognito:groups", List.of(groups)));
+    }
+
+    private static Member withEmail(Member student, String email) {
+        return new Member(student.username(), student.sub(), email);
+    }
+
+    /** Shown with the email and Student Number they first had, whatever Cognito says now. */
+    private void assertIsShownUnchanged(String token, Member student) {
+        classGroupsWith(token).expectStatus().isOk().expectBody()
+                .jsonPath("$.classGroups[0].students[?(@.sub == '%s')].email".formatted(student.sub()))
+                .isEqualTo(List.of(student.email()))
+                .jsonPath("$.classGroups[0].students[?(@.sub == '%s')].studentNumber".formatted(student.sub()))
+                .isEqualTo(List.of(student.username()));
     }
 
     /** A Student whose username is also their Student Number, as in s12345@mail.com. */

@@ -16,7 +16,7 @@ import software.amazon.awssdk.core.exception.SdkException;
 /**
  * Pulls people from the identity provider: the only thing that does. Everything that succeeds is
  * kept and everything that fails is listed in the result, so one bad person or ClassGroup costs
- * nothing else.
+ * nothing else. A saved Student never changes or goes away: only their memberships do.
  *
  * <p>For now only an Instructor's button triggers this. It may later run nightly, around 01:00 or
  * 02:00, aligned with the updates of the university system.
@@ -83,7 +83,7 @@ class Refresh {
         }
         var students = new ArrayList<CognitoDirectory.Member>();
         for (var member : members) {
-            if (saveStudent(classGroup, member, failures)) {
+            if (ensureStudentSaved(classGroup, member, failures)) {
                 students.add(member);
             }
         }
@@ -107,17 +107,21 @@ class Refresh {
         }
     }
 
-    private boolean saveStudent(String classGroup, CognitoDirectory.Member member, List<Failure> failures) {
-        if (!isUsable(member.email())) {
-            failures.add(new Failure(classGroup, member.username(), NO_USABLE_EMAIL));
-            return false;
-        }
+    /** What the identity provider now says about a saved Student is ignored, so it cannot fail. */
+    private boolean ensureStudentSaved(String classGroup, CognitoDirectory.Member member, List<Failure> failures) {
         if (member.sub() == null) {
             failures.add(new Failure(classGroup, member.username(), "The identity provider gave no sub."));
             return false;
         }
         try {
-            store.saveStudent(member.sub(), member.email(), member.studentNumber());
+            if (store.isSaved(member.sub())) {
+                return true;
+            }
+            if (!isUsable(member.email())) {
+                failures.add(new Failure(classGroup, member.username(), NO_USABLE_EMAIL));
+                return false;
+            }
+            store.addStudent(member.sub(), member.email(), member.studentNumber());
             return true;
         } catch (DuplicateKeyException e) {
             failures.add(new Failure(

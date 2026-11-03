@@ -53,7 +53,9 @@ Spring accepts any token the configured provider signed for the configured clien
 
 ## Refresh
 
-An Instructor's **Refresh** button (`POST /api/refresh`) is the only thing that pulls data from the identity provider. It needs a valid token with an Instructor group, not a row in the database, and it adds the caller to the database. For each Instructor group in the token, such as `17w`, it reads the paired ClassGroup, `17c`, and replaces that ClassGroup's members, then makes any missing technical Gitea account. The response lists everything that failed, in `failures`, and everything else is kept. `GET /api/class-groups` then shows the ClassGroups the caller teaches.
+An Instructor's **Refresh** button (`POST /api/refresh`) is the only thing that pulls data from the identity provider. It needs a valid token with an Instructor group, not a row in the database, and it adds the caller to the database. For each Instructor group in the token, such as `17w`, it reads the paired ClassGroup, `17c`, and replaces that ClassGroup's members, then makes any missing technical Gitea account. The response lists everything that failed, in `failures`, and everything else is kept. `GET /api/class-groups` then shows the ClassGroups the caller teaches, leaving out any with no members.
+
+A saved Student never changes: Refresh only adds new Students and changes memberships. Their email and Student Number stay even if the identity provider now gives something different or unusable, with no failure listed, and a Student who leaves every ClassGroup stays in the database. Only a person not yet saved is skipped and listed for having no usable email. A ClassGroup that could not be read keeps its previous members.
 
 Two seeded cases show failures on purpose. Refresh as `anowak` lists `s18003`, who has no email. Refresh as `s20001` lists `20c`, a ClassGroup nobody belongs to and which therefore does not exist in the mock.
 

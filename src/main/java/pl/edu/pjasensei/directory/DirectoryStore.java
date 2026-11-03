@@ -28,11 +28,18 @@ public class DirectoryStore {
                 .update();
     }
 
-    void saveStudent(String sub, String email, String studentNumber) {
+    boolean isSaved(String studentSub) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM students WHERE sub = ?)")
+                .param(studentSub)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /** Another Instructor's Refresh may have just added this Student, who then stays as they are. */
+    void addStudent(String sub, String email, String studentNumber) {
         jdbc.sql("""
                         INSERT INTO students (sub, email, student_number) VALUES (:sub, :email, :studentNumber)
-                        ON CONFLICT (sub) DO UPDATE
-                        SET email = EXCLUDED.email, student_number = EXCLUDED.student_number
+                        ON CONFLICT (sub) DO NOTHING
                         """)
                 .param("sub", sub)
                 .param("email", email)

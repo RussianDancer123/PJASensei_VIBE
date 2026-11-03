@@ -33,7 +33,7 @@
             </div>
           </template>
 
-          <p x-show="classGroups.length === 0">Click Refresh to load the ClassGroups you teach.</p>
+          <p x-show="classGroups.length === 0">No ClassGroups with Students to show. Click Refresh to load the ones you teach.</p>
           <form x-show="classGroups.length > 0" @submit.prevent="send">
             <h2>Send an Assignment</h2>
             <p><label>Title <input type="text" x-model="title" required maxlength="200"></label></p>
