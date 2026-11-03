@@ -15,6 +15,7 @@ services:
       PORT: "8090"
       IDENTITY_ISSUER: ${IDENTITY_ISSUER:?}
       IDENTITY_CLIENT_ID: ${IDENTITY_CLIENT_ID:?}
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID:?}
     volumes:
       - ./mocks:/app:ro
     networks: [edge]

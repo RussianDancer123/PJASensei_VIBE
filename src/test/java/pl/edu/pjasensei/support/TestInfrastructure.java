@@ -19,6 +19,7 @@ class TestInfrastructure {
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18-alpine");
     private static final GiteaContainer GITEA = new GiteaContainer("gitea/gitea:1.27.3");
     private static final TestIdentityProvider IDENTITY_PROVIDER = new TestIdentityProvider();
+    private static final TestCognito COGNITO = new TestCognito();
 
     @Bean
     @ServiceConnection
@@ -32,8 +33,29 @@ class TestInfrastructure {
     }
 
     @Bean
+    TestGitea testGitea(GiteaContainer gitea) {
+        return new TestGitea(gitea);
+    }
+
+    @Bean
     TestIdentityProvider identityProvider() {
         return IDENTITY_PROVIDER;
+    }
+
+    @Bean
+    TestCognito cognito() {
+        return COGNITO;
+    }
+
+    @Bean
+    DynamicPropertyRegistrar cognitoProperties(TestCognito cognito) {
+        return registry -> {
+            registry.add("pjasensei.cognito.region", () -> TestCognito.REGION);
+            registry.add("pjasensei.cognito.user-pool-id", () -> TestCognito.USER_POOL_ID);
+            registry.add("pjasensei.cognito.access-key-id", () -> TestCognito.ACCESS_KEY_ID);
+            registry.add("pjasensei.cognito.secret-access-key", () -> TestCognito.SECRET_ACCESS_KEY);
+            registry.add("pjasensei.cognito.endpoint-override", cognito::endpoint);
+        };
     }
 
     @Bean

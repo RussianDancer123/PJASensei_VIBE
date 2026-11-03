@@ -17,6 +17,34 @@
         <p>Signed in as <strong x-text="me.username"></strong></p>
         <p>Roles: <strong x-text="me.roles.join(', ') || 'none'"></strong></p>
         <button @click="signOut">Sign out</button>
+
+        <section x-show="isInstructor">
+          <h2>ClassGroups</h2>
+          <button @click="refresh" :disabled="refreshing" x-text="refreshing ? 'Refreshing…' : 'Refresh'"></button>
+
+          <template x-if="refreshFailures.length > 0">
+            <div role="alert">
+              <p>Refresh could not do all of this:</p>
+              <ul>
+                <template x-for="failure in refreshFailures">
+                  <li x-text="[failure.classGroup, failure.person, failure.reason].filter(Boolean).join(': ')"></li>
+                </template>
+              </ul>
+            </div>
+          </template>
+
+          <p x-show="classGroups.length === 0">Click Refresh to load the ClassGroups you teach.</p>
+          <template x-for="classGroup in classGroups" :key="classGroup.name">
+            <details>
+              <summary x-text="`${classGroup.name} (${classGroup.students.length})`"></summary>
+              <ul>
+                <template x-for="student in classGroup.students" :key="student.sub">
+                  <li x-text="`${student.studentNumber} (${student.email})`"></li>
+                </template>
+              </ul>
+            </details>
+          </template>
+        </section>
       </div>
     </template>
     <button x-show="!me && !loading" @click="signIn">Sign in</button>

@@ -5,6 +5,7 @@
   { "username": "s17002", "password": "password", "sub": "22222222-0000-4000-8000-000000000002", "email": "s17002@mail.com", "groups": ["17c"] },
   { "username": "s18001", "password": "password", "sub": "22222222-0000-4000-8000-000000000003", "email": "s18001@mail.com", "groups": ["18c"] },
   { "username": "s18002", "password": "password", "sub": "22222222-0000-4000-8000-000000000004", "email": "s18002@mail.com", "groups": ["18c", "eu-central-1_mock_Google"] },
+  { "username": "s18003", "password": "password", "sub": "22222222-0000-4000-8000-000000000006", "groups": ["18c"] },
   { "username": "s19001", "password": "password", "sub": "22222222-0000-4000-8000-000000000005", "email": "s19001@mail.com", "groups": ["19c"] },
   { "username": "s20001", "password": "password", "sub": "33333333-0000-4000-8000-000000000001", "email": "s20001@mail.com", "groups": ["20w", "17c"] },
   { "username": "outsider", "password": "password", "sub": "44444444-0000-4000-8000-000000000001", "email": "outsider@mail.com", "groups": ["eu-central-1_mock_Google"] },

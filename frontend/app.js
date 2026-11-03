@@ -9,11 +9,21 @@ document.addEventListener("alpine:init", () => {
     me: null,
     error: null,
     loading: true,
+    classGroups: [],
+    refreshFailures: [],
+    refreshing: false,
+
+    get isInstructor() {
+      return this.me?.roles.includes("INSTRUCTOR");
+    },
 
     async init() {
       try {
         await completeSignIn();
         this.me = await fetchMe();
+        if (this.isInstructor) {
+          this.classGroups = await fetchClassGroups();
+        }
       } catch (error) {
         this.error = error.message;
       } finally {
@@ -35,6 +45,25 @@ document.addEventListener("alpine:init", () => {
       sessionStorage.removeItem(TOKEN_KEY);
       this.me = null;
       this.error = null;
+      this.classGroups = [];
+      this.refreshFailures = [];
+    },
+
+    async refresh() {
+      this.error = null;
+      this.refreshing = true;
+      try {
+        const response = await callApi("/api/refresh", { method: "POST" });
+        if (!response.ok) {
+          throw new Error(`Refresh failed: Spring answered ${response.status}.`);
+        }
+        this.refreshFailures = (await response.json()).failures;
+        this.classGroups = await fetchClassGroups();
+      } catch (error) {
+        this.error = error.message;
+      } finally {
+        this.refreshing = false;
+      }
     },
   }));
 });
@@ -109,6 +138,23 @@ async function fetchMe() {
     throw new Error(`Spring answered ${response.status}.`);
   }
   return response.json();
+}
+
+// An Instructor Refresh has not added yet is refused, and simply has nothing to show so far.
+async function fetchClassGroups() {
+  const response = await callApi("/api/class-groups");
+  if (response.status === 403) {
+    return [];
+  }
+  if (!response.ok) {
+    throw new Error(`Spring answered ${response.status}.`);
+  }
+  return (await response.json()).classGroups;
+}
+
+function callApi(path, options = {}) {
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  return fetch(path, { ...options, headers: { Authorization: `Bearer ${token}` } });
 }
 
 async function identityProvider() {

@@ -1,14 +1,19 @@
 // Development-only stand-in for Cognito: real OIDC discovery, signing keys, and authorization code
-// with PKCE on its own login page. Spring and the front end know it only through its public contract.
+// with PKCE on its own login page, and the Cognito API calls Refresh makes. Spring and the front end
+// know it only through its public contract.
 const crypto = require("node:crypto");
 const users = require("./mock-idp-users.json");
 
 const BASE_PATH = "/mock-idp";
 const CODE_LIFETIME_SECONDS = 300;
 const TOKEN_LIFETIME_SECONDS = 3600;
+const COGNITO_TARGET_PREFIX = "AWSCognitoIdentityProviderService.";
+// Small, so that everyday use of the mock goes through paging as well.
+const COGNITO_PAGE_SIZE = 2;
 
 const issuer = process.env.IDENTITY_ISSUER;
 const clientId = process.env.IDENTITY_CLIENT_ID;
+const userPoolId = process.env.COGNITO_USER_POOL_ID;
 
 // A new key at every start, so nothing secret is stored; tokens from before a restart stop working.
 const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -29,6 +34,10 @@ async function handleMockIdp(request, response, pathname) {
       return logIn(request, response);
     case "POST /oauth2/token":
       return exchangeCode(request, response);
+    // The AWS SDK adds a slash to the path of an endpoint override.
+    case "POST /cognito-api":
+    case "POST /cognito-api/":
+      return cognitoApi(request, response);
     default:
       response.writeHead(404);
       response.end();
@@ -182,6 +191,65 @@ function signedToken(claims) {
 
 function encode(json) {
   return Buffer.from(JSON.stringify(json)).toString("base64url");
+}
+
+// Answers as the Cognito API does, including its error shape. Requests are not checked for a valid
+// AWS signature, because the mock has no secret to compare them with.
+async function cognitoApi(request, response) {
+  let body = "";
+  for await (const chunk of request) {
+    body += chunk;
+  }
+  const input = JSON.parse(body);
+  if (input.UserPoolId !== userPoolId) {
+    return sendCognitoError(response, "ResourceNotFoundException", `User pool ${input.UserPoolId} does not exist.`);
+  }
+  switch (request.headers["x-amz-target"]) {
+    case `${COGNITO_TARGET_PREFIX}ListUsersInGroup`:
+      return listUsersInGroup(response, input);
+    case `${COGNITO_TARGET_PREFIX}AdminGetUser`:
+      return adminGetUser(response, input);
+    default:
+      return sendCognitoError(response, "UnknownOperationException", "Unknown operation.");
+  }
+}
+
+function listUsersInGroup(response, { GroupName: group, NextToken: nextToken }) {
+  // The seed file has no list of groups, so a group nobody belongs to does not exist here.
+  const members = users.filter((user) => user.groups.includes(group));
+  if (members.length === 0) {
+    return sendCognitoError(response, "ResourceNotFoundException", `Group ${group} does not exist.`);
+  }
+  const start = Number(nextToken ?? 0);
+  const end = start + COGNITO_PAGE_SIZE;
+  sendCognitoJson(response, 200, {
+    Users: members.slice(start, end).map((user) => ({ Username: user.username, Attributes: attributesOf(user) })),
+    ...(end < members.length ? { NextToken: String(end) } : {}),
+  });
+}
+
+function adminGetUser(response, { Username: username }) {
+  const user = users.find((candidate) => candidate.username === username);
+  if (!user) {
+    return sendCognitoError(response, "UserNotFoundException", "User does not exist.");
+  }
+  sendCognitoJson(response, 200, { Username: user.username, UserAttributes: attributesOf(user) });
+}
+
+function attributesOf(user) {
+  return [
+    { Name: "sub", Value: user.sub },
+    ...(user.email ? [{ Name: "email", Value: user.email }] : []),
+  ];
+}
+
+function sendCognitoError(response, type, message) {
+  sendCognitoJson(response, 400, { __type: type, message });
+}
+
+function sendCognitoJson(response, status, json) {
+  response.writeHead(status, { "Content-Type": "application/x-amz-json-1.1" });
+  response.end(JSON.stringify(json));
 }
 
 function sendLoginPage(response, status, params, problem = "") {

@@ -10,6 +10,8 @@ import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -42,6 +44,10 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/status").permitAll()
                         // Answers from the token alone, for people Refresh has not added yet.
                         .requestMatchers(HttpMethod.GET, "/api/me").authenticated()
+                        // Adds the caller to the database, so it can ask only for the token and role.
+                        .requestMatchers(HttpMethod.POST, "/api/refresh").hasRole(Role.INSTRUCTOR.name())
+                        .requestMatchers(HttpMethod.GET, "/api/class-groups").access(AuthorizationManagers.allOf(
+                                AuthorityAuthorizationManager.hasRole(Role.INSTRUCTOR.name()), knownUser))
                         .anyRequest().access(knownUser))
                 .oauth2ResourceServer(server -> server.jwt(Customizer.withDefaults()))
                 .build();

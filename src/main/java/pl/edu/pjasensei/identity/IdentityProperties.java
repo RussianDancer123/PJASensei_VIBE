@@ -37,6 +37,11 @@ record IdentityProperties(
         return isNumberWithSuffix(group, classGroupSuffix);
     }
 
+    /** The ClassGroup with the same number as this Instructor group. */
+    String pairedClassGroup(String instructorGroup) {
+        return instructorGroup.substring(0, instructorGroup.length() - instructorGroupSuffix.length()) + classGroupSuffix;
+    }
+
     private static boolean isNumberWithSuffix(String group, String suffix) {
         return group.matches("\\d+" + Pattern.quote(suffix));
     }
