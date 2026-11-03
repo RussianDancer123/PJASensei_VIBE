@@ -9,20 +9,35 @@ import org.springframework.util.Assert;
  * is the public address compared with the token; the signing keys have their own address because
  * the mock's public address does not resolve inside the Compose network. With real Cognito both are
  * the same public address.
+ *
+ * <p>A group that gives a role is a number plus a suffix: Instructors of {@code 17w} teach the
+ * ClassGroup {@code 17c}, the one with the same number. Any other group is ignored.
  */
 @ConfigurationProperties("pjasensei.identity")
 record IdentityProperties(
         String issuer,
         String jwkSetUri,
         String clientId,
-        Pattern instructorGroupPattern,
-        Pattern classGroupPattern) {
+        String instructorGroupSuffix,
+        String classGroupSuffix) {
 
     IdentityProperties {
         Assert.hasText(issuer, "pjasensei.identity.issuer must be set");
         Assert.hasText(jwkSetUri, "pjasensei.identity.jwk-set-uri must be set");
         Assert.hasText(clientId, "pjasensei.identity.client-id must be set");
-        Assert.notNull(instructorGroupPattern, "pjasensei.identity.instructor-group-pattern must be set");
-        Assert.notNull(classGroupPattern, "pjasensei.identity.class-group-pattern must be set");
+        Assert.hasText(instructorGroupSuffix, "pjasensei.identity.instructor-group-suffix must be set");
+        Assert.hasText(classGroupSuffix, "pjasensei.identity.class-group-suffix must be set");
+    }
+
+    boolean isInstructorGroup(String group) {
+        return isNumberWithSuffix(group, instructorGroupSuffix);
+    }
+
+    boolean isClassGroup(String group) {
+        return isNumberWithSuffix(group, classGroupSuffix);
+    }
+
+    private static boolean isNumberWithSuffix(String group, String suffix) {
+        return group.matches("\\d+" + Pattern.quote(suffix));
     }
 }

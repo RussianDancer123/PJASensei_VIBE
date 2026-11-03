@@ -43,6 +43,11 @@ class SignInApiTest {
     }
 
     @Test
+    void refusesATokenThatNeverExpires() {
+        me(identityProvider.token(claims -> claims.expirationTime(null))).expectStatus().isUnauthorized();
+    }
+
+    @Test
     void refusesATokenFromAnotherIssuer() {
         me(identityProvider.token(claims -> claims.issuer("https://elsewhere.invalid/pool")))
                 .expectStatus().isUnauthorized();

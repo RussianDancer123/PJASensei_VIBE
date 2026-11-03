@@ -120,20 +120,20 @@ async function exchangeCode(request, response) {
   }
 
   // A code works once, even when this attempt fails.
-  const code = pendingCodes.get(form.get("code"));
+  const pending = pendingCodes.get(form.get("code"));
   pendingCodes.delete(form.get("code"));
   const valid =
-    code &&
-    code.expiresAt > Date.now() &&
-    code.redirectUri === form.get("redirect_uri") &&
-    code.codeChallenge === challengeOf(form.get("code_verifier") ?? "");
+    pending &&
+    pending.expiresAt > Date.now() &&
+    pending.redirectUri === form.get("redirect_uri") &&
+    pending.codeChallenge === challengeOf(form.get("code_verifier") ?? "");
   if (!valid) {
     return sendJson(response, 400, { error: "invalid_grant" });
   }
 
   sendJson(response, 200, {
-    access_token: accessToken(code.user),
-    id_token: idToken(code.user, code.nonce),
+    access_token: accessToken(pending.user),
+    id_token: idToken(pending.user, pending.nonce),
     token_type: "Bearer",
     expires_in: TOKEN_LIFETIME_SECONDS,
   });

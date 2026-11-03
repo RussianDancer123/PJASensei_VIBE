@@ -44,17 +44,14 @@ class RolesApiTest {
 
     @Test
     void aTokenWithoutGroupsGivesNoRoles() {
-        var token = identityProvider.token();
-
-        http.get().uri("/api/me").header("Authorization", "Bearer " + token).exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.roles").isEmpty();
+        rolesWith(identityProvider.token()).jsonPath("$.roles").isEmpty();
     }
 
     private RestTestClient.BodyContentSpec rolesOf(List<String> groups) {
-        var token = identityProvider.token(claims -> claims.claim("cognito:groups", groups));
+        return rolesWith(identityProvider.token(claims -> claims.claim("cognito:groups", groups)));
+    }
 
+    private RestTestClient.BodyContentSpec rolesWith(String token) {
         return http.get().uri("/api/me").header("Authorization", "Bearer " + token).exchange()
                 .expectStatus().isOk()
                 .expectBody();

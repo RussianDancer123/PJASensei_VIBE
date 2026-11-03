@@ -40,8 +40,7 @@ document.addEventListener("alpine:init", () => {
 });
 
 async function startSignIn() {
-  const { issuer, clientId } = await getJson("/config.json");
-  const { authorization_endpoint: authorizationEndpoint } = await discover(issuer);
+  const { clientId, authorization_endpoint: authorizationEndpoint } = await identityProvider();
 
   const state = randomString();
   const codeVerifier = randomString();
@@ -77,8 +76,7 @@ async function completeSignIn() {
     throw new Error("Sign-in failed: the answer does not belong to this tab. Please try again.");
   }
 
-  const { issuer, clientId } = await getJson("/config.json");
-  const { token_endpoint: tokenEndpoint } = await discover(issuer);
+  const { clientId, token_endpoint: tokenEndpoint } = await identityProvider();
   const response = await fetch(tokenEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -113,8 +111,9 @@ async function fetchMe() {
   return response.json();
 }
 
-function discover(issuer) {
-  return getJson(`${issuer}/.well-known/openid-configuration`);
+async function identityProvider() {
+  const { issuer, clientId } = await getJson("/config.json");
+  return { clientId, ...(await getJson(`${issuer}/.well-known/openid-configuration`)) };
 }
 
 async function getJson(url) {

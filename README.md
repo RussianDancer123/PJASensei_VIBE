@@ -21,7 +21,7 @@ Everything is reached through <http://localhost:8080>:
 | `/`            | Static front end                           |
 | `/api`         | Spring; `/api/status` shows what it reaches |
 | `/plugin-mock` | IDE plugin mock (development only)         |
-| `/mock-idp`    | Identity provider mock (development only)  |
+| `/mock-idp/`   | Identity provider mock (development only); start at `/mock-idp/.well-known/openid-configuration` |
 | `/config.json` | Identity provider settings for the front end, written by Caddy |
 
 Only Caddy's HTTP port and Gitea's SSH port (`2222`) are published. Of the running services, only Spring reaches the Gitea API and Postgres. `gitea-provision`, a one-off job at every start, leaves Spring's Gitea API token in a volume it shares only with Spring.

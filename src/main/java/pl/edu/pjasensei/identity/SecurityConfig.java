@@ -1,8 +1,10 @@
 package pl.edu.pjasensei.identity;
 
 import jakarta.servlet.DispatcherType;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
@@ -14,6 +16,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
@@ -27,7 +30,7 @@ import org.springframework.security.web.SecurityFilterChain;
 class SecurityConfig {
 
     @Bean
-    SecurityFilterChain api(HttpSecurity http, KnownUserRule knownUser) throws Exception {
+    SecurityFilterChain apiSecurity(HttpSecurity http, KnownUserRule knownUser) throws Exception {
         return http
                 // Applies the mappings of CrossOriginConfig, which would otherwise never be reached.
                 .cors(Customizer.withDefaults())
@@ -45,13 +48,15 @@ class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(IdentityProperties identity, RestTemplateBuilder http) {
+    JwtDecoder jwtDecoder(IdentityProperties identity, RestTemplateBuilder builder) {
         var decoder = NimbusJwtDecoder.withJwkSetUri(identity.jwkSetUri())
-                .restOperations(http.build())
+                .restOperations(builder.build())
                 .build();
         // Cognito access tokens carry the client in client_id and normally have no aud.
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(identity.issuer()),
+                // The default checks the expiry only of a token that has one.
+                new JwtClaimValidator<Instant>(JwtClaimNames.EXP, Objects::nonNull),
                 new JwtClaimValidator<String>("client_id", identity.clientId()::equals)));
         return decoder;
     }
@@ -66,10 +71,10 @@ class SecurityConfig {
                 return List.of();
             }
             var authorities = new ArrayList<GrantedAuthority>();
-            if (groups.stream().anyMatch(identity.instructorGroupPattern().asMatchPredicate())) {
+            if (groups.stream().anyMatch(identity::isInstructorGroup)) {
                 authorities.add(Role.INSTRUCTOR.authority());
             }
-            if (groups.stream().anyMatch(identity.classGroupPattern().asMatchPredicate())) {
+            if (groups.stream().anyMatch(identity::isClassGroup)) {
                 authorities.add(Role.STUDENT.authority());
             }
             return authorities;

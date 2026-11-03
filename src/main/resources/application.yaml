@@ -11,6 +11,6 @@ spring:
 
 pjasensei:
   identity:
-    # A group must match as a whole, so 17w gives Instructor and 17c gives Student.
-    instructor-group-pattern: '\d+w'
-    class-group-pattern: '\d+c'
+    # A number plus one of these: 17w gives Instructor and 17c gives Student.
+    instructor-group-suffix: w
+    class-group-suffix: c
