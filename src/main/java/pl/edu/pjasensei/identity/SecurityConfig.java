@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -25,6 +26,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
 /** Spring is only a resource server: it validates tokens and never sees a login or a password. */
 @Configuration(proxyBeanMethods = false)
@@ -46,11 +48,15 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/me").authenticated()
                         // Adds the caller to the database, so it can ask only for the token and role.
                         .requestMatchers(HttpMethod.POST, "/api/refresh").hasRole(Role.INSTRUCTOR.name())
-                        .requestMatchers(HttpMethod.GET, "/api/class-groups").access(AuthorizationManagers.allOf(
-                                AuthorityAuthorizationManager.hasRole(Role.INSTRUCTOR.name()), knownUser))
+                        .requestMatchers(HttpMethod.GET, "/api/class-groups").access(knownInstructor(knownUser))
+                        .requestMatchers(HttpMethod.POST, "/api/assignments/**").access(knownInstructor(knownUser))
                         .anyRequest().access(knownUser))
                 .oauth2ResourceServer(server -> server.jwt(Customizer.withDefaults()))
                 .build();
+    }
+
+    private static AuthorizationManager<RequestAuthorizationContext> knownInstructor(KnownUserRule knownUser) {
+        return AuthorizationManagers.allOf(AuthorityAuthorizationManager.hasRole(Role.INSTRUCTOR.name()), knownUser);
     }
 
     @Bean

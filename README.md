@@ -57,6 +57,15 @@ An Instructor's **Refresh** button (`POST /api/refresh`) is the only thing that 
 
 Two seeded cases show failures on purpose. Refresh as `anowak` lists `s18003`, who has no email. Refresh as `s20001` lists `20c`, a ClassGroup nobody belongs to and which therefore does not exist in the mock.
 
+## Send an Assignment
+
+An Instructor enters a title and the HTTPS URL of a public repository on a host in `SOURCE_REPOSITORY_HOSTS`, chooses Students of the ClassGroups they teach, and sends. The front end makes two requests:
+
+1. `POST /api/assignments`, with `{ "title", "sourceUrl", "recipients": [<sub>] }`, copies the SourceRepository once into a private snapshot in Gitea and keeps the Assignment. If the copy fails, it answers with an error and keeps nothing. Refusals explain themselves in `detail`.
+2. `POST /api/assignments/{id}/repositories`, allowed only for the Instructor who sent it, makes each StudentRepository from the snapshot with a clean history.
+
+Spring's own Gitea account owns every snapshot and StudentRepository. A repository is named like `assignment-17-s12345`, is private, and has two collaborators: the Student with write access and the sending Instructor with read access.
+
 ## Switch to real Cognito
 
 Spring has no code specific to the mock, so this takes environment variables alone. In your `.env`:
@@ -82,4 +91,4 @@ Tests need Docker too: they start Spring against real Postgres and real Gitea wi
 ./gradlew test
 ```
 
-Annotate a test class with `@IntegrationTest` and inject a `RestTestClient` to exercise the HTTP API, a `TestIdentityProvider` to sign tokens for it, a `TestCognito` to set what the Cognito API answers, and a `TestGitea` to look at Gitea from outside Spring. The test Gitea uses the same `docker/gitea` config and provisioning script as the stack.
+Annotate a test class with `@IntegrationTest` and inject a `RestTestClient` to exercise the HTTP API, a `TestIdentityProvider` to sign tokens for it, a `TestCognito` to set what the Cognito API answers, and a `TestGitea` to look at Gitea from outside Spring. The test Gitea uses the same `docker/gitea` config and provisioning script as the stack. It imports only from `source.test`, an HTTPS proxy in front of itself, so a test can create a SourceRepository with `TestGitea` and change it later. To use it, a test sets `pjasensei.assignments.allowed-source-hosts=source.test`.

@@ -1,9 +1,14 @@
 package pl.edu.pjasensei.gitea;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -18,11 +23,17 @@ public class GiteaClient {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final RestClient http;
+    private final RestClient importHttp;
 
     GiteaClient(RestClient.Builder builder, GiteaProperties properties) {
-        this.http = builder
-                .baseUrl(properties.url())
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "token " + properties.apiToken())
+        builder.baseUrl(properties.url())
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "token " + properties.apiToken());
+        this.http = builder.build();
+        // Gitea answers an import only when it has copied the repository, which can take a while.
+        this.importHttp = builder.clone()
+                .requestFactory(ClientHttpRequestFactoryBuilder.detect()
+                        .build(HttpClientSettings.defaults()
+                                .withTimeouts(Duration.ofSeconds(5), properties.importTimeout())))
                 .build();
     }
 
@@ -65,6 +76,75 @@ public class GiteaClient {
             }
         }
     }
+
+    /**
+     * Copies a SourceRepository once into a private snapshot that StudentRepositories start from. A
+     * template, because that is how Gitea makes a repository with the same files and a new history.
+     *
+     * @return the name of the snapshot
+     * @throws RestClientException when Gitea cannot or will not copy it
+     */
+    public String importSnapshot(String sourceUrl) {
+        var name = "snapshot-" + UUID.randomUUID();
+        importHttp.post()
+                .uri("/api/v1/repos/migrate")
+                .body(Map.of("clone_addr", sourceUrl, "repo_name", name, "service", "git", "private", true))
+                .retrieve()
+                .toBodilessEntity();
+        http.patch()
+                .uri("/api/v1/repos/{owner}/{name}", serviceAccount(), name)
+                .body(Map.of("template", true))
+                .retrieve()
+                .toBodilessEntity();
+        return name;
+    }
+
+    /**
+     * Makes a private repository from a snapshot, with a clean history. Spring's account owns it,
+     * because an owner could do more than the write access a Student is meant to have.
+     *
+     * @return the address to clone it from over SSH
+     * @throws RestClientException when Gitea cannot or will not make it
+     */
+    public String createFromSnapshot(String snapshot, String name) {
+        var owner = serviceAccount();
+        return http.post()
+                .uri("/api/v1/repos/{owner}/{name}/generate", owner, snapshot)
+                .body(Map.of("owner", owner, "name", name, "private", true, "git_content", true))
+                .retrieve()
+                .body(Repository.class)
+                .sshUrl();
+    }
+
+    /** @throws RestClientException when Gitea cannot or will not give it */
+    public void grantWrite(String repository, String account) {
+        grant(repository, account, "write");
+    }
+
+    /** @throws RestClientException when Gitea cannot or will not give it */
+    public void grantRead(String repository, String account) {
+        grant(repository, account, "read");
+    }
+
+    private void grant(String repository, String account, String permission) {
+        http.put()
+                .uri(
+                        "/api/v1/repos/{owner}/{name}/collaborators/{account}",
+                        serviceAccount(),
+                        repository,
+                        account)
+                .body(Map.of("permission", permission))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    private String serviceAccount() {
+        return http.get().uri("/api/v1/user").retrieve().body(Account.class).login();
+    }
+
+    private record Account(String login) {}
+
+    private record Repository(@JsonProperty("ssh_url") String sshUrl) {}
 
     private boolean accountExists(String name) {
         try {

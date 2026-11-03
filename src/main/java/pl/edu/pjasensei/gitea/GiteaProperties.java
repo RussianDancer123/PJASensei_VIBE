@@ -1,5 +1,6 @@
 package pl.edu.pjasensei.gitea;
 
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.Assert;
 
@@ -8,7 +9,7 @@ import org.springframework.util.Assert;
  * missing one stops Spring at startup rather than failing on the first call.
  */
 @ConfigurationProperties("pjasensei.gitea")
-public record GiteaProperties(String url, String apiToken) {
+public record GiteaProperties(String url, String apiToken, Duration importTimeout) {
 
     public GiteaProperties {
         Assert.hasText(url, "pjasensei.gitea.url must be set");

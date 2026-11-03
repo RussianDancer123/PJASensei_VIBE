@@ -9,6 +9,7 @@ import java.util.Properties;
 import org.testcontainers.containers.Container.ExecResult;
 import org.testcontainers.containers.ExecConfig;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.utility.DockerImageName;
@@ -19,7 +20,9 @@ import org.testcontainers.utility.DockerImageName;
  */
 final class GiteaContainer extends GenericContainer<GiteaContainer> {
 
-    private static final int HTTP_PORT = 3000;
+    static final int HTTP_PORT = 3000;
+    static final String NETWORK_ALIAS = "gitea";
+
     private static final Path CONFIG_FILE = Path.of("docker/gitea/gitea.env");
     private static final Path PROVISIONING_SCRIPT = Path.of("docker/gitea/provision-api-token.sh");
     private static final String SCRIPT_IN_CONTAINER = "/provision-api-token.sh";
@@ -27,12 +30,18 @@ final class GiteaContainer extends GenericContainer<GiteaContainer> {
 
     private String apiToken;
 
-    GiteaContainer(String image) {
+    GiteaContainer(String image, Network network) {
         super(DockerImageName.parse(image));
+        withNetwork(network);
+        withNetworkAliases(NETWORK_ALIAS);
         withExposedPorts(HTTP_PORT);
         waitingFor(Wait.forHttp("/api/healthz").forPort(HTTP_PORT));
         withCopyToContainer(Transferable.of(read(PROVISIONING_SCRIPT)), SCRIPT_IN_CONTAINER);
         sharedConfig().forEach((name, value) -> withEnv((String) name, (String) value));
+        // Imports come from SourceRepositoryHost, on a private network and with a local certificate.
+        withEnv("GITEA__migrations__ALLOWED_DOMAINS", SourceRepositoryHost.NAME);
+        withEnv("GITEA__migrations__ALLOW_LOCALNETWORKS", "true");
+        withEnv("GITEA__migrations__SKIP_TLS_VERIFY", "true");
     }
 
     String apiUrl() {

@@ -12,9 +12,66 @@ document.addEventListener("alpine:init", () => {
     classGroups: [],
     refreshFailures: [],
     refreshing: false,
+    title: "",
+    sourceUrl: "",
+    search: "",
+    selected: [],
+    sendStep: null,
+    sentMessage: null,
+    sendError: null,
 
     get isInstructor() {
       return this.me?.roles.includes("INSTRUCTOR");
+    },
+
+    matchingStudents(classGroup) {
+      const search = this.search.trim().toLowerCase();
+      return classGroup.students.filter((student) => student.studentNumber.toLowerCase().includes(search));
+    },
+
+    isWholeGroupSelected(classGroup) {
+      return classGroup.students.length > 0
+        && classGroup.students.every((student) => this.selected.includes(student.sub));
+    },
+
+    // A Student may be in several ClassGroups, so selection is kept per Student.
+    selectWholeGroup(classGroup, chosen) {
+      const subs = classGroup.students.map((student) => student.sub);
+      const others = this.selected.filter((sub) => !subs.includes(sub));
+      this.selected = chosen ? [...others, ...subs] : others;
+    },
+
+    // Two requests, so a wrong URL is obvious at once, before any StudentRepository is attempted.
+    async send() {
+      this.sendError = null;
+      this.sentMessage = null;
+      this.sendStep = "copying";
+      try {
+        const created = await callApi("/api/assignments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: this.title, sourceUrl: this.sourceUrl, recipients: this.selected }),
+        });
+        if (!created.ok) {
+          throw new Error(await reasonFrom(created));
+        }
+        const { id } = await created.json();
+
+        this.sendStep = "creating";
+        const repositories = await callApi(`/api/assignments/${id}/repositories`, { method: "POST" });
+        if (!repositories.ok) {
+          throw new Error(await reasonFrom(repositories));
+        }
+
+        this.sentMessage = `Sent "${this.title}" to ${this.selected.length} Student(s).`;
+        this.title = "";
+        this.sourceUrl = "";
+        this.selected = [];
+      } catch (error) {
+        this.sendError = error.message;
+      } finally {
+        this.sendStep = null;
+      }
     },
 
     async init() {
@@ -47,6 +104,12 @@ document.addEventListener("alpine:init", () => {
       this.error = null;
       this.classGroups = [];
       this.refreshFailures = [];
+      this.title = "";
+      this.sourceUrl = "";
+      this.search = "";
+      this.selected = [];
+      this.sentMessage = null;
+      this.sendError = null;
     },
 
     async refresh() {
@@ -154,7 +217,13 @@ async function fetchClassGroups() {
 
 function callApi(path, options = {}) {
   const token = sessionStorage.getItem(TOKEN_KEY);
-  return fetch(path, { ...options, headers: { Authorization: `Bearer ${token}` } });
+  return fetch(path, { ...options, headers: { ...options.headers, Authorization: `Bearer ${token}` } });
+}
+
+// Spring explains what it refuses in `detail`, though Spring Security's own refusals have no body.
+async function reasonFrom(response) {
+  const body = await response.json().catch(() => null);
+  return body?.detail ?? `Spring answered ${response.status}.`;
 }
 
 async function identityProvider() {

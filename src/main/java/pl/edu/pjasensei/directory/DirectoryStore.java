@@ -8,7 +8,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** The people and ClassGroup memberships Refresh keeps. It stores no work, so none is affected. */
 @Component
-class DirectoryStore {
+public class DirectoryStore {
 
     private final JdbcClient jdbc;
     private final TransactionTemplate transaction;
@@ -61,7 +61,7 @@ class DirectoryStore {
         });
     }
 
-    List<Student> studentsOf(String classGroup) {
+    public List<Student> studentsOf(String classGroup) {
         return jdbc.sql("""
                         SELECT s.sub, s.email, s.student_number
                         FROM class_group_members m JOIN students s ON s.sub = m.student_sub
@@ -73,5 +73,5 @@ class DirectoryStore {
                 .list();
     }
 
-    record Student(String sub, String email, String studentNumber) {}
+    public record Student(String sub, String email, String studentNumber) {}
 }

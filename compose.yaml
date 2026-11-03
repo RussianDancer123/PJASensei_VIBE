@@ -43,6 +43,7 @@ services:
       PJASENSEI_COGNITO_ACCESS_KEY_ID: ${COGNITO_ACCESS_KEY_ID:?}
       PJASENSEI_COGNITO_SECRET_ACCESS_KEY: ${COGNITO_SECRET_ACCESS_KEY:?}
       PJASENSEI_COGNITO_ENDPOINT_OVERRIDE: ${COGNITO_ENDPOINT_OVERRIDE?}
+      PJASENSEI_ASSIGNMENTS_ALLOWED_SOURCE_HOSTS: ${SOURCE_REPOSITORY_HOSTS:?}
     volumes:
       - gitea-api-token:/run/pjasensei-secrets:ro
     networks: [edge, data, gitea]
@@ -79,6 +80,8 @@ services:
       GITEA__server__ROOT_URL: ${GITEA_API_URL:?}
       GITEA__server__SSH_DOMAIN: ${GITEA_SSH_DOMAIN:?}
       GITEA__server__SSH_PORT: ${GITEA_SSH_PORT:?}
+      # Gitea makes the copy, so it enforces the same hosts Spring checks URLs against.
+      GITEA__migrations__ALLOWED_DOMAINS: ${SOURCE_REPOSITORY_HOSTS:?}
     ports:
       - "${GITEA_SSH_PORT:?}:22"
     volumes:

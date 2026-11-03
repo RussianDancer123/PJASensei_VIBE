@@ -34,16 +34,47 @@
           </template>
 
           <p x-show="classGroups.length === 0">Click Refresh to load the ClassGroups you teach.</p>
-          <template x-for="classGroup in classGroups" :key="classGroup.name">
-            <details>
-              <summary x-text="`${classGroup.name} (${classGroup.students.length})`"></summary>
-              <ul>
-                <template x-for="student in classGroup.students" :key="student.sub">
-                  <li x-text="`${student.studentNumber} (${student.email})`"></li>
-                </template>
-              </ul>
-            </details>
-          </template>
+          <form x-show="classGroups.length > 0" @submit.prevent="send">
+            <h2>Send an Assignment</h2>
+            <p><label>Title <input type="text" x-model="title" required maxlength="200"></label></p>
+            <p><label>Public GitHub URL
+              <input type="url" x-model="sourceUrl" required placeholder="https://github.com/owner/repository">
+            </label></p>
+
+            <p><label>Search by Student Number <input type="search" x-model="search"></label></p>
+            <template x-for="classGroup in classGroups" :key="classGroup.name">
+              <details x-show="matchingStudents(classGroup).length > 0" :open="search !== ''">
+                <summary>
+                  <label>
+                    <input type="checkbox"
+                           :checked="isWholeGroupSelected(classGroup)"
+                           @change="selectWholeGroup(classGroup, $event.target.checked)">
+                    <span x-text="`${classGroup.name} (${classGroup.students.length})`"></span>
+                  </label>
+                </summary>
+                <ul>
+                  <template x-for="student in matchingStudents(classGroup)" :key="student.sub">
+                    <li>
+                      <label>
+                        <input type="checkbox" :value="student.sub" x-model="selected">
+                        <span x-text="`${student.studentNumber} (${student.email})`"></span>
+                      </label>
+                    </li>
+                  </template>
+                </ul>
+              </details>
+            </template>
+
+            <p><button :disabled="sendStep !== null || selected.length === 0"
+                       x-text="`Send to ${selected.length} selected`"></button></p>
+          </form>
+
+          <p x-show="sendStep === 'copying'" role="status">Copying the repository… <progress></progress></p>
+          <p x-show="sendStep === 'creating'" role="status">
+            Repository copied. Creating StudentRepositories… <progress></progress>
+          </p>
+          <p x-show="sentMessage" role="status" x-text="sentMessage"></p>
+          <p x-show="sendError" role="alert" x-text="sendError"></p>
         </section>
       </div>
     </template>

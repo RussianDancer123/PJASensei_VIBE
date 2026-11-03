@@ -5,6 +5,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.test.context.DynamicPropertyRegistrar;
+import org.testcontainers.containers.Network;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
@@ -17,7 +18,9 @@ class TestInfrastructure {
     private static final String GITEA_TOKEN_PROPERTY = "pjasensei.gitea.api-token";
 
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18-alpine");
-    private static final GiteaContainer GITEA = new GiteaContainer("gitea/gitea:1.27.3");
+    private static final Network NETWORK = Network.newNetwork();
+    private static final GiteaContainer GITEA = new GiteaContainer("gitea/gitea:1.27.3", NETWORK);
+    private static final SourceRepositoryHost SOURCE_HOST = new SourceRepositoryHost("caddy:2-alpine", NETWORK);
     private static final TestIdentityProvider IDENTITY_PROVIDER = new TestIdentityProvider();
     private static final TestCognito COGNITO = new TestCognito();
 
@@ -30,6 +33,11 @@ class TestInfrastructure {
     @Bean
     GiteaContainer gitea() {
         return GITEA;
+    }
+
+    @Bean
+    SourceRepositoryHost sourceRepositoryHost() {
+        return SOURCE_HOST;
     }
 
     @Bean
