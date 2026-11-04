@@ -1,14 +1,22 @@
 package pl.edu.pjasensei.gitea;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
@@ -23,6 +31,9 @@ public class GiteaClient {
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String TEMPLATE_INSTRUCTIONS = ".gitea/template";
+    private static final Pattern README_NAME = Pattern.compile("readme(\\.[^.]+)?", Pattern.CASE_INSENSITIVE);
+    private static final String PREFERRED_README = "README.md";
+    private static final long MAX_README_BYTES = 1024 * 1024;
 
     private final RestClient http;
     private final RestClient importHttp;
@@ -76,6 +87,49 @@ public class GiteaClient {
             if (!accountExists(sub)) {
                 throw e;
             }
+        }
+    }
+
+    /**
+     * Puts an SSH key on an account, which may hold several. Safe to repeat, so a plugin can register
+     * its key every time it starts.
+     *
+     * @throws RestClientException when Gitea cannot answer
+     */
+    public KeyResult addPublicKey(String account, String publicKey) {
+        try {
+            http.post()
+                    .uri("/api/v1/admin/users/{account}/keys", account)
+                    // Gitea needs a title unique to the account, which nobody ever sees.
+                    .body(Map.of("title", "key-" + UUID.randomUUID(), "key", publicKey))
+                    .retrieve()
+                    .toBodilessEntity();
+            return KeyResult.ADDED;
+        } catch (HttpClientErrorException.UnprocessableContent e) {
+            // Only the words of Gitea's answer tell a key already in use from an invalid one.
+            if (!e.getResponseBodyAsString().contains("has been used")) {
+                return KeyResult.INVALID;
+            }
+            return accountHasKey(account, publicKey) ? KeyResult.ADDED : KeyResult.USED_BY_ANOTHER_ACCOUNT;
+        }
+    }
+
+    private boolean accountHasKey(String account, String publicKey) {
+        return !http.get()
+                .uri("/api/v1/users/{account}/keys?fingerprint={fingerprint}", account, fingerprintOf(publicKey))
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<Object>>() {})
+                .isEmpty();
+    }
+
+    /** Of a key Gitea has already found valid, in the form its lookup by fingerprint expects. */
+    private static String fingerprintOf(String publicKey) {
+        var key = Base64.getDecoder().decode(publicKey.strip().split("\\s+")[1]);
+        try {
+            var digest = MessageDigest.getInstance("SHA-256").digest(key);
+            return "SHA256:" + Base64.getEncoder().withoutPadding().encodeToString(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
         }
     }
 
@@ -174,9 +228,61 @@ public class GiteaClient {
         return http.get().uri("/api/v1/user").retrieve().body(Account.class).login();
     }
 
+    /**
+     * The text of the README at the top of a repository, unrendered. A Student can push anything to
+     * their StudentRepository, so a README too big to hold in memory is treated as missing.
+     *
+     * @throws RestClientException when Gitea cannot answer
+     */
+    public Optional<String> readme(String repository) {
+        var owner = serviceAccount();
+        List<Entry> entries;
+        try {
+            entries = http.get()
+                    .uri("/api/v1/repos/{owner}/{name}/contents", owner, repository)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        }
+        return entries.stream()
+                .filter(Entry::isReadme)
+                .min(Comparator.comparing((Entry entry) -> !entry.name().equalsIgnoreCase(PREFERRED_README))
+                        .thenComparing(Entry::name))
+                .filter(readme -> readme.size() <= MAX_README_BYTES)
+                .flatMap(readme -> readFile(owner, repository, readme.name()));
+    }
+
+    /** As bytes, because Gitea does not always name the encoding and this would then be misread. */
+    private Optional<String> readFile(String owner, String repository, String path) {
+        try {
+            var content = http.get()
+                    .uri("/api/v1/repos/{owner}/{name}/raw/{path}", owner, repository, path)
+                    .retrieve()
+                    .body(byte[].class);
+            return Optional.of(new String(content, StandardCharsets.UTF_8));
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        }
+    }
+
+    public enum KeyResult {
+        /** The account has the key now, whether or not it had it already. */
+        ADDED,
+        INVALID,
+        USED_BY_ANOTHER_ACCOUNT
+    }
+
     private record Account(String login) {}
 
     private record File(String sha) {}
+
+    private record Entry(String name, String type, long size) {
+
+        boolean isReadme() {
+            return "file".equals(type) && README_NAME.matcher(name).matches();
+        }
+    }
 
     private record Repository(@JsonProperty("ssh_url") String sshUrl) {}
 

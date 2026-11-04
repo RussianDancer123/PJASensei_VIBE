@@ -19,9 +19,84 @@ document.addEventListener("alpine:init", () => {
     sendStep: null,
     sentMessage: null,
     sendError: null,
+    assignments: [],
+    preview: null,
+    cloneCommand: null,
+    copied: false,
+    workError: null,
+    publicKey: "",
+    registeringKey: false,
+    keyMessage: null,
+    keyError: null,
 
     get isInstructor() {
       return this.me?.roles.includes("INSTRUCTOR");
+    },
+
+    get isStudent() {
+      return this.me?.roles.includes("STUDENT");
+    },
+
+    async openPreview(id) {
+      this.workError = null;
+      this.preview = null;
+      this.cloneCommand = null;
+      this.copied = false;
+      try {
+        const response = await callApi(`/api/student/assignments/${id}`);
+        if (!response.ok) {
+          throw new Error(await reasonFrom(response));
+        }
+        this.preview = await response.json();
+      } catch (error) {
+        this.workError = error.message;
+      }
+    },
+
+    async getRepository() {
+      this.workError = null;
+      try {
+        const response = await callApi(`/api/student/assignments/${this.preview.id}/ssh-address`);
+        if (!response.ok) {
+          throw new Error(await reasonFrom(response));
+        }
+        const { sshUrl } = await response.json();
+        this.cloneCommand = `git clone ${sshUrl}`;
+        this.copied = false;
+      } catch (error) {
+        this.workError = error.message;
+      }
+    },
+
+    async copyCloneCommand() {
+      try {
+        await navigator.clipboard.writeText(this.cloneCommand);
+        this.copied = true;
+      } catch {
+        this.workError = "Could not copy. Please select the command and copy it yourself.";
+      }
+    },
+
+    async registerKey() {
+      this.keyError = null;
+      this.keyMessage = null;
+      this.registeringKey = true;
+      try {
+        const response = await callApi("/api/ssh-keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ publicKey: this.publicKey }),
+        });
+        if (!response.ok) {
+          throw new Error(await reasonFrom(response));
+        }
+        this.publicKey = "";
+        this.keyMessage = "Key added.";
+      } catch (error) {
+        this.keyError = error.message;
+      } finally {
+        this.registeringKey = false;
+      }
     },
 
     matchingStudents(classGroup) {
@@ -83,6 +158,9 @@ document.addEventListener("alpine:init", () => {
         if (this.isInstructor) {
           this.classGroups = await fetchClassGroups();
         }
+        if (this.isStudent) {
+          this.assignments = await fetchStudentAssignments();
+        }
       } catch (error) {
         this.error = error.message;
       } finally {
@@ -112,6 +190,14 @@ document.addEventListener("alpine:init", () => {
       this.selected = [];
       this.sentMessage = null;
       this.sendError = null;
+      this.assignments = [];
+      this.preview = null;
+      this.cloneCommand = null;
+      this.copied = false;
+      this.workError = null;
+      this.publicKey = "";
+      this.keyMessage = null;
+      this.keyError = null;
     },
 
     async refresh() {
@@ -218,6 +304,18 @@ async function fetchClassGroups() {
     throw new Error(`Spring answered ${response.status}.`);
   }
   return (await response.json()).classGroups;
+}
+
+// A Student no Refresh has added yet is refused, and simply has nothing to show so far.
+async function fetchStudentAssignments() {
+  const response = await callApi("/api/student/assignments");
+  if (response.status === 403) {
+    return [];
+  }
+  if (!response.ok) {
+    throw new Error(`Spring answered ${response.status}.`);
+  }
+  return (await response.json()).assignments;
 }
 
 function callApi(path, options = {}) {

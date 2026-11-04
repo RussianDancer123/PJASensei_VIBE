@@ -77,5 +77,33 @@ class AssignmentStore {
                 .update();
     }
 
+    /** The newest first. A recipient whose StudentRepository was never made has nothing to start. */
+    List<StudentAssignment> assignmentsWithRepositoryOf(String studentSub) {
+        return jdbc.sql("""
+                        SELECT a.id, a.title
+                        FROM student_repositories sr JOIN assignments a ON a.id = sr.assignment_id
+                        WHERE sr.student_sub = ?
+                        ORDER BY a.id DESC
+                        """)
+                .param(studentSub)
+                .query(StudentAssignment.class)
+                .list();
+    }
+
+    Optional<Work> workOf(long assignment, String studentSub) {
+        return jdbc.sql("""
+                        SELECT a.title, sr.repository_name, sr.ssh_url
+                        FROM student_repositories sr JOIN assignments a ON a.id = sr.assignment_id
+                        WHERE sr.assignment_id = ? AND sr.student_sub = ?
+                        """)
+                .params(assignment, studentSub)
+                .query(Work.class)
+                .optional();
+    }
+
     record Recipient(String sub, String studentNumber) {}
+
+    record StudentAssignment(long id, String title) {}
+
+    record Work(String title, String repositoryName, String sshUrl) {}
 }

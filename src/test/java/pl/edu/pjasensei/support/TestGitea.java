@@ -1,11 +1,13 @@
 package pl.edu.pjasensei.support;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -32,6 +34,22 @@ public final class TestGitea {
         api().delete().uri("/api/v1/admin/users/{name}", name).retrieve().toBodilessEntity();
     }
 
+    /** The SSH keys on an account. */
+    public List<String> publicKeys(String account) {
+        return api().get()
+                .uri("/api/v1/users/{account}/keys", account)
+                .retrieve()
+                .body(JsonNode.class)
+                .valueStream()
+                .map(key -> key.path("key").asString().strip())
+                .toList();
+    }
+
+    /** Someone with a new key pair and the real git and ssh programs, keeping their files in a directory. */
+    public GitUser newGitUser(Path home) {
+        return new GitUser(home, container.getHost(), container.sshPort());
+    }
+
     /** A new public SourceRepository with several commits, one of which adds {@code first.txt}. */
     public SourceRepository newSourceRepository() {
         var name = "source-" + UUID.randomUUID();
@@ -52,6 +70,34 @@ public final class TestGitea {
                         "content", Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8))))
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    /** Replaces a file of a SourceRepository with new content. */
+    public void setFile(SourceRepository source, String path, String content) {
+        api().put()
+                .uri("/api/v1/repos/{owner}/{name}/contents/{path}", source.owner(), source.name(), path)
+                .body(Map.of(
+                        "content", Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8)),
+                        "sha", shaOf(source, path)))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    public void deleteFile(SourceRepository source, String path) {
+        api().method(HttpMethod.DELETE)
+                .uri("/api/v1/repos/{owner}/{name}/contents/{path}", source.owner(), source.name(), path)
+                .body(Map.of("sha", shaOf(source, path)))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    private String shaOf(SourceRepository source, String path) {
+        return api().get()
+                .uri("/api/v1/repos/{owner}/{name}/contents/{path}", source.owner(), source.name(), path)
+                .retrieve()
+                .body(JsonNode.class)
+                .path("sha")
+                .asString();
     }
 
     /** A repository of Spring's own account, which holds every snapshot and StudentRepository. */

@@ -18,6 +18,44 @@
         <p>Roles: <strong x-text="me.roles.join(', ') || 'none'"></strong></p>
         <button @click="signOut">Sign out</button>
 
+        <section x-show="isStudent">
+          <h2>My Assignments</h2>
+          <p x-show="assignments.length === 0">No Assignments to show yet.</p>
+          <ul>
+            <template x-for="assignment in assignments" :key="assignment.id">
+              <li><button @click="openPreview(assignment.id)" x-text="assignment.title"></button></li>
+            </template>
+          </ul>
+
+          <template x-if="preview">
+            <article>
+              <h3 x-text="preview.title"></h3>
+              <pre x-show="preview.readme !== null" x-text="preview.readme"></pre>
+              <p x-show="preview.readme === null">This Assignment has no README to show.</p>
+              <button @click="getRepository">Get</button>
+              <template x-if="cloneCommand">
+                <p>
+                  <label>Clone command <input type="text" readonly size="70" :value="cloneCommand"></label>
+                  <button @click="copyCloneCommand" x-text="copied ? 'Copied' : 'Copy'"></button>
+                </p>
+              </template>
+            </article>
+          </template>
+          <p x-show="workError" role="alert" x-text="workError"></p>
+        </section>
+
+        <section>
+          <h2>SSH keys</h2>
+          <form @submit.prevent="registerKey">
+            <p><label>Public key (the contents of a .pub file)<br>
+              <textarea x-model="publicKey" required rows="3" cols="70"></textarea>
+            </label></p>
+            <p><button :disabled="registeringKey">Add key</button></p>
+          </form>
+          <p x-show="keyMessage" role="status" x-text="keyMessage"></p>
+          <p x-show="keyError" role="alert" x-text="keyError"></p>
+        </section>
+
         <section x-show="isInstructor">
           <h2>ClassGroups</h2>
           <button @click="refresh" :disabled="refreshing" x-text="refreshing ? 'Refreshing…' : 'Refresh'"></button>
