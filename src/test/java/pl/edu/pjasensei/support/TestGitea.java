@@ -62,6 +62,25 @@ public final class TestGitea {
                 .body(JsonNode.class);
     }
 
+    /** An empty repository of Spring's own account, as an earlier attempt may have left behind. */
+    public void createRepository(String name) {
+        api().post()
+                .uri("/api/v1/user/repos")
+                .body(Map.of("name", name, "private", true))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    /** How many snapshots exist, for seeing that a failed send leaves none behind. */
+    public long snapshotCount() {
+        return Long.parseLong(api().get()
+                .uri("/api/v1/repos/search?q=snapshot-&limit=1")
+                .retrieve()
+                .toBodilessEntity()
+                .getHeaders()
+                .getFirst("X-Total-Count"));
+    }
+
     public boolean repositoryExists(String name) {
         try {
             repository(name);

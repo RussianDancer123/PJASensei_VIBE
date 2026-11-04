@@ -80,26 +80,60 @@ public class GiteaClient {
     }
 
     /**
-     * Copies a SourceRepository once into a private snapshot that StudentRepositories start from. A
-     * template, because that is how Gitea makes a repository with the same files and a new history.
+     * Copies a SourceRepository once into a private repository, to become a snapshot. A failure leaves
+     * nothing behind as far as possible, since a timeout says nothing about whether the copy worked.
      *
-     * @return the name of the snapshot
+     * @return the name of the repository, which {@link #prepareSnapshot} has to finish
      * @throws RestClientException when Gitea cannot or will not copy it
      */
-    public String importSnapshot(String sourceUrl) {
+    public String importSource(String sourceUrl) {
         var name = "snapshot-" + UUID.randomUUID();
-        importHttp.post()
-                .uri("/api/v1/repos/migrate")
-                .body(Map.of("clone_addr", sourceUrl, "repo_name", name, "service", "git", "private", true))
-                .retrieve()
-                .toBodilessEntity();
+        try {
+            importHttp.post()
+                    .uri("/api/v1/repos/migrate")
+                    .body(Map.of("clone_addr", sourceUrl, "repo_name", name, "service", "git", "private", true))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException e) {
+            try {
+                deleteRepository(name);
+            } catch (RestClientException notDeleted) {
+                e.addSuppressed(notDeleted);
+            }
+            throw e;
+        }
+        return name;
+    }
+
+    /**
+     * Turns that repository into the snapshot StudentRepositories start from. A template, because that is
+     * how Gitea makes a repository with the same files and a new history.
+     *
+     * @throws RestClientException when Gitea cannot or will not do it
+     */
+    public void prepareSnapshot(String name) {
         http.patch()
                 .uri("/api/v1/repos/{owner}/{name}", serviceAccount(), name)
                 .body(Map.of("template", true))
                 .retrieve()
                 .toBodilessEntity();
         removeTemplateInstructions(name);
-        return name;
+    }
+
+    /**
+     * Removes a repository of Spring's account, which may already be gone.
+     *
+     * @throws RestClientException when Gitea cannot or will not remove it
+     */
+    public void deleteRepository(String name) {
+        try {
+            http.delete()
+                    .uri("/api/v1/repos/{owner}/{name}", serviceAccount(), name)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException.NotFound e) {
+            // Nothing to remove.
+        }
     }
 
     /**
@@ -135,17 +169,31 @@ public class GiteaClient {
      * Makes a private repository from a snapshot, with a clean history. Spring's account owns it,
      * because an owner could do more than the write access a Student is meant to have.
      *
+     * <p>A repository of exactly this name counts as made, as an earlier attempt may have made it and
+     * then timed out. Gitea ignores case in names, so one differing in case is someone else's.
+     *
      * @return the address to clone it from over SSH
      * @throws RestClientException when Gitea cannot or will not make it
      */
     public String createFromSnapshot(String snapshot, String name) {
         var owner = serviceAccount();
-        return http.post()
-                .uri("/api/v1/repos/{owner}/{name}/generate", owner, snapshot)
-                .body(Map.of("owner", owner, "name", name, "private", true, "git_content", true))
-                .retrieve()
-                .body(Repository.class)
-                .sshUrl();
+        try {
+            return http.post()
+                    .uri("/api/v1/repos/{owner}/{name}/generate", owner, snapshot)
+                    .body(Map.of("owner", owner, "name", name, "private", true, "git_content", true))
+                    .retrieve()
+                    .body(Repository.class)
+                    .sshUrl();
+        } catch (HttpClientErrorException.Conflict e) {
+            var existing = http.get()
+                    .uri("/api/v1/repos/{owner}/{name}", owner, name)
+                    .retrieve()
+                    .body(Repository.class);
+            if (!name.equals(existing.name())) {
+                throw e;
+            }
+            return existing.sshUrl();
+        }
     }
 
     /** @throws RestClientException when Gitea cannot or will not give it */
@@ -178,7 +226,7 @@ public class GiteaClient {
 
     private record File(String sha) {}
 
-    private record Repository(@JsonProperty("ssh_url") String sshUrl) {}
+    private record Repository(String name, @JsonProperty("ssh_url") String sshUrl) {}
 
     private boolean accountExists(String name) {
         try {

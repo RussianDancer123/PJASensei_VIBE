@@ -75,6 +75,8 @@
           </p>
           <p x-show="sentMessage" role="status" x-text="sentMessage"></p>
           <p x-show="sendError" role="alert" x-text="sendError"></p>
+          <p x-show="studentNumbersWithoutRepository.length > 0" role="alert"
+             x-text="`No StudentRepository could be made for: ${studentNumbersWithoutRepository.join(', ')}.`"></p>
         </section>
       </div>
     </template>

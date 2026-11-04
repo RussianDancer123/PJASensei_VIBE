@@ -21,6 +21,7 @@ class TestInfrastructure {
     private static final Network NETWORK = Network.newNetwork();
     private static final GiteaContainer GITEA = new GiteaContainer("gitea/gitea:1.27.3", NETWORK);
     private static final SourceRepositoryHost SOURCE_HOST = new SourceRepositoryHost("caddy:2-alpine", NETWORK);
+    private static final TestGiteaBoundary GITEA_BOUNDARY = new TestGiteaBoundary(GITEA::apiUrl);
     private static final TestIdentityProvider IDENTITY_PROVIDER = new TestIdentityProvider();
     private static final TestCognito COGNITO = new TestCognito();
 
@@ -43,6 +44,11 @@ class TestInfrastructure {
     @Bean
     TestGitea testGitea(GiteaContainer gitea) {
         return new TestGitea(gitea);
+    }
+
+    @Bean
+    TestGiteaBoundary testGiteaBoundary() {
+        return GITEA_BOUNDARY;
     }
 
     @Bean
@@ -78,7 +84,7 @@ class TestInfrastructure {
     @Bean
     DynamicPropertyRegistrar giteaProperties(GiteaContainer gitea, Environment environment) {
         return registry -> {
-            registry.add("pjasensei.gitea.url", gitea::apiUrl);
+            registry.add("pjasensei.gitea.url", GITEA_BOUNDARY::url);
             // A test may set its own token; dynamic properties would otherwise override it.
             if (!environment.containsProperty(GITEA_TOKEN_PROPERTY)) {
                 registry.add(GITEA_TOKEN_PROPERTY, gitea::apiToken);

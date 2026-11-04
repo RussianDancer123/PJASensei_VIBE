@@ -68,10 +68,12 @@ class AssignmentStore {
                 .list();
     }
 
+    /** Another request for the same Assignment may have just saved this one, which is then done. */
     void saveRepository(long assignment, String studentSub, String repositoryName, String sshUrl) {
         jdbc.sql("""
                         INSERT INTO student_repositories (assignment_id, student_sub, repository_name, ssh_url)
                         VALUES (?, ?, ?, ?)
+                        ON CONFLICT (assignment_id, student_sub) DO NOTHING
                         """)
                 .params(assignment, studentSub, repositoryName, sshUrl)
                 .update();

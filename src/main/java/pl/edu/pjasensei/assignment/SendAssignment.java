@@ -2,6 +2,8 @@ package pl.edu.pjasensei.assignment;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -26,6 +28,8 @@ class SendAssignment {
 
     private static final Logger log = LoggerFactory.getLogger(SendAssignment.class);
     private static final int MAX_TITLE_LENGTH = 200;
+    private static final int ATTEMPTS_PER_REPOSITORY = 3;
+    private static final Duration PAUSE_BETWEEN_ATTEMPTS = Duration.ofSeconds(1);
 
     private final AssignmentStore store;
     private final DirectoryStore directory;
@@ -72,27 +76,83 @@ class SendAssignment {
 
         String snapshot;
         try {
-            snapshot = gitea.importSnapshot(request.sourceUrl());
+            snapshot = gitea.importSource(request.sourceUrl());
         } catch (RestClientException e) {
             log.warn("Could not import {}", request.sourceUrl(), e);
             throw new AssignmentRefused(
                     HttpStatus.BAD_GATEWAY, "Could not copy the repository. Is the URL right, and is it public?");
         }
-        return store.save(request.title(), request.sourceUrl(), snapshot, instructorSub, recipients);
+        try {
+            gitea.prepareSnapshot(snapshot);
+            return store.save(request.title(), request.sourceUrl(), snapshot, instructorSub, recipients);
+        } catch (RestClientException e) {
+            log.warn("Could not prepare snapshot {}", snapshot, e);
+            discardSnapshot(snapshot);
+            throw new AssignmentRefused(
+                    HttpStatus.BAD_GATEWAY, "The repository was copied, but could not be prepared. Please try again.");
+        } catch (RuntimeException e) {
+            discardSnapshot(snapshot);
+            throw e;
+        }
     }
 
-    /** Makes the StudentRepositories one at a time, each a fresh start from the snapshot. */
-    void createRepositories(long assignment, String instructorSub) {
+    /** No Assignment will use this snapshot. The Instructor's answer does not depend on removing it. */
+    private void discardSnapshot(String snapshot) {
+        try {
+            gitea.deleteRepository(snapshot);
+        } catch (RestClientException e) {
+            log.warn("Could not remove unused snapshot {}", snapshot, e);
+        }
+    }
+
+    /**
+     * Makes the StudentRepositories one at a time, each a fresh start from the snapshot, so one that
+     * fails costs the others nothing. Safe to repeat: only recipients without one are handled.
+     *
+     * @return the recipients still without a StudentRepository, because every attempt failed
+     */
+    List<AssignmentStore.Recipient> createRepositories(long assignment, String instructorSub) {
         String snapshot = store.snapshotOf(assignment, instructorSub)
                 .orElseThrow(() -> new AssignmentRefused(HttpStatus.NOT_FOUND, "You sent no such Assignment."));
+        var failures = new ArrayList<AssignmentStore.Recipient>();
         for (var recipient : store.recipientsWithoutRepository(assignment)) {
-            String name = "assignment-%d-%s".formatted(assignment, recipient.studentNumber());
-            gitea.ensureAccount(recipient.sub());
-            gitea.ensureAccount(instructorSub);
-            String sshUrl = gitea.createFromSnapshot(snapshot, name);
-            gitea.grantWrite(name, recipient.sub());
-            gitea.grantRead(name, instructorSub);
-            store.saveRepository(assignment, recipient.sub(), name, sshUrl);
+            if (!createRepository(assignment, snapshot, recipient, instructorSub)) {
+                failures.add(recipient);
+            }
+        }
+        return failures;
+    }
+
+    private boolean createRepository(
+            long assignment, String snapshot, AssignmentStore.Recipient recipient, String instructorSub) {
+        String name = "assignment-%d-%s".formatted(assignment, recipient.studentNumber());
+        for (int attempt = 1; attempt <= ATTEMPTS_PER_REPOSITORY; attempt++) {
+            try {
+                // Every step is safe to repeat, so an attempt picks up whatever an earlier one left.
+                gitea.ensureAccount(recipient.sub());
+                gitea.ensureAccount(instructorSub);
+                String sshUrl = gitea.createFromSnapshot(snapshot, name);
+                gitea.grantWrite(name, recipient.sub());
+                gitea.grantRead(name, instructorSub);
+                store.saveRepository(assignment, recipient.sub(), name, sshUrl);
+                return true;
+            } catch (RuntimeException e) {
+                // Whatever went wrong, the Instructor still has to hear about everyone.
+                log.warn("Attempt {} of {} at {} failed", attempt, ATTEMPTS_PER_REPOSITORY, name, e);
+            }
+            if (attempt < ATTEMPTS_PER_REPOSITORY) {
+                pauseBeforeNextAttempt();
+            }
+        }
+        return false;
+    }
+
+    /** Attempts in quick succession would all meet the same temporary problem. */
+    private static void pauseBeforeNextAttempt() {
+        try {
+            Thread.sleep(PAUSE_BETWEEN_ATTEMPTS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
