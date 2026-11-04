@@ -6,7 +6,7 @@ What an IDE plugin has to do to work with PJASensei. `/plugin-mock` (`mocks/plug
 
 - A sign-in button, using authorization code with PKCE on the identity provider's own page. The plugin holds the token and renews it.
 - An Assignments tab, which is the front end in an iframe.
-- A Chat tab, which is the plugin's own and separate from the front end.
+- A Chat tab, which is the plugin's own and separate from the front end. See [Chat](#chat).
 
 ## Embedding the front end
 
@@ -46,3 +46,32 @@ Sent with `Authorization: Bearer <accessToken>`:
 - `POST /api/ssh-keys` with `{ "publicKey" }` registers the SSH public key of the IDE. Adding the same key again changes nothing, so a plugin can do it at every start. See [Student work](../README.md#student-work) in the README for the answers.
 
 A Student or Instructor Refresh has not added yet gets a 403 here, as everywhere else.
+
+## Chat
+
+The plugin calls Spring directly with its access token, never the AI. `GET /api/student/assignments` gives the Assignments to choose from, each `{ "id", "title" }`. A TutorSession belongs to one Assignment's StudentRepository, and Spring makes it on first use.
+
+**`GET /api/student/assignments/{id}/tutor-session/messages`** gives the history, oldest first. `files` appears only on student messages that had them:
+
+```json
+{ "messages": [
+  { "role": "student", "content": "...", "files": [{ "path": "...", "content": "..." }] },
+  { "role": "tutor", "content": "..." }
+] }
+```
+
+**`POST /api/student/assignments/{id}/tutor-session/messages`** sends a message and gives `{ "reply": "..." }`. `files` is optional and text-only:
+
+```json
+{ "content": "...", "files": [{ "path": "...", "content": "..." }] }
+```
+
+Refusals and failures carry a readable `detail`:
+
+| Status | Meaning                                                                                |
+| ------ | -------------------------------------------------------------------------------------- |
+| 400    | The message is not of the shape above                                                  |
+| 403    | The caller is not a Student, or no Refresh has added them yet                          |
+| 404    | The caller has no StudentRepository for this Assignment                                |
+| 413    | A file is over 2 MB or the message over 10 MB, the starting values of configurable limits |
+| 502    | The AI failed, which affects only the chat                                             |

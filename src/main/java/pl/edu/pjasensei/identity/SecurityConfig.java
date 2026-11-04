@@ -51,7 +51,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/class-groups").access(known(Role.INSTRUCTOR, knownUser))
                         .requestMatchers(HttpMethod.POST, "/api/assignments/**").access(known(Role.INSTRUCTOR, knownUser))
                         .requestMatchers(HttpMethod.GET, "/api/assignments/**").access(known(Role.INSTRUCTOR, knownUser))
-                        .requestMatchers(HttpMethod.GET, "/api/student/**").access(known(Role.STUDENT, knownUser))
+                        .requestMatchers("/api/student/**").access(known(Role.STUDENT, knownUser))
                         .anyRequest().access(knownUser))
                 .oauth2ResourceServer(server -> server.jwt(Customizer.withDefaults()))
                 .build();

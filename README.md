@@ -105,7 +105,9 @@ git clone ssh://git@localhost:2222/pjasensei-spring/assignment-1-s17001.git
 
 The real IDE plugin is not part of this repository. [`docs/plugin-contract.md`](docs/plugin-contract.md) is what it has to implement, and `/plugin-mock` is a stand-in that keeps to that contract.
 
-To try the whole flow, open `/plugin-mock` and sign in with its button. The Assignments tab is the real front end in an iframe, which uses the plugin's token. Paste an SSH public key in the plugin mock's field. Then click **Get**, on an Assignment as a Student or on a recipient of an opened Assignment as an Instructor, and the plugin mock shows a `git clone` command to copy. The Get button on recipients exists only in the iframe. **Renew token** gets a new token the way the plugin mock otherwise does by itself a minute before the old one expires, and passes it on to the iframe. The Chat tab is a placeholder for now.
+To try the whole flow, open `/plugin-mock` and sign in with its button. The Assignments tab is the real front end in an iframe, which uses the plugin's token. Paste an SSH public key in the plugin mock's field. Then click **Get**, on an Assignment as a Student or on a recipient of an opened Assignment as an Instructor, and the plugin mock shows a `git clone` command to copy. The Get button on recipients exists only in the iframe. **Renew token** gets a new token the way the plugin mock otherwise does by itself a minute before the old one expires, and passes it on to the iframe. 
+
+The Chat tab talks to Spring directly with the plugin's token. Choose an Assignment, send a message with text files if you like, and the mock AI answers with the reversed text. Earlier messages show when you come back, for as long as the mocks keep running, because the mock AI remembers them only in memory. After a restart of the mocks Spring starts a new TutorSession by itself and the old messages are gone. To see the chat error, run `docker compose -p pjasensei-11 stop mocks`, with `-p` matching your stack: the Assignments stay readable as long as your token is valid.
 
 ## Switch to real Cognito
 
@@ -121,6 +123,7 @@ Spring has no code specific to the mock, so this takes environment variables alo
 | `COGNITO_USER_POOL_ID`                                    | The ID of the user pool                                           |
 | `COGNITO_ACCESS_KEY_ID`, `COGNITO_SECRET_ACCESS_KEY`      | Credentials allowed `cognito-idp:ListUsersInGroup` and `cognito-idp:AdminGetUser` on the pool |
 | `COGNITO_ENDPOINT_OVERRIDE`                               | Empty                                                             |
+| `AI_URL`                                                  | The address of the AI service. The mock AI goes away with the mocks, so until there is a real one the chat answers with an error and nothing else is affected |
 
 The front end finds the address of the Cognito domain through OIDC discovery on the issuer, so it needs no setting of its own. The app client has to be a public one, without a secret, allowing the authorization code grant, the `openid` scope and the address of the front end as a callback URL.
 

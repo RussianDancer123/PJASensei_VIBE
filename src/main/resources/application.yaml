@@ -1,3 +1,9 @@
+server:
+  tomcat:
+    # What Tomcat reads of a refused body before it cuts the connection. Over the message limit, so
+    # that a Student who sends somewhat too much gets the answer saying so.
+    max-swallow-size: 64MB
+
 spring:
   application:
     name: PJASensei_VIBE
@@ -14,6 +20,9 @@ pjasensei:
     allowed-source-hosts: github.com
   gitea:
     import-timeout: 5m
+  tutor:
+    max-file-size: 2MB
+    max-message-size: 10MB
   identity:
     # A number plus one of these: 17w gives Instructor and 17c gives Student.
     instructor-group-suffix: w

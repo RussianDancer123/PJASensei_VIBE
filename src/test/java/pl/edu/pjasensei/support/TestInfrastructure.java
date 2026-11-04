@@ -24,6 +24,7 @@ class TestInfrastructure {
     private static final TestGiteaBoundary GITEA_BOUNDARY = new TestGiteaBoundary(GITEA::apiUrl);
     private static final TestIdentityProvider IDENTITY_PROVIDER = new TestIdentityProvider();
     private static final TestCognito COGNITO = new TestCognito();
+    private static final TestAi AI = new TestAi();
 
     @Bean
     @ServiceConnection
@@ -59,6 +60,16 @@ class TestInfrastructure {
     @Bean
     TestCognito cognito() {
         return COGNITO;
+    }
+
+    @Bean
+    TestAi ai() {
+        return AI;
+    }
+
+    @Bean
+    DynamicPropertyRegistrar tutorProperties(TestAi ai) {
+        return registry -> registry.add("pjasensei.tutor.ai-url", ai::url);
     }
 
     @Bean

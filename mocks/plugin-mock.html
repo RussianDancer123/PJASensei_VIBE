@@ -6,7 +6,8 @@
   <style>
     body { max-width: 26rem; margin: 0.5rem; }
     iframe { width: 100%; height: 40rem; border: 1px solid; box-sizing: border-box; }
-    textarea, input { width: 100%; box-sizing: border-box; }
+    textarea, input, select { width: 100%; box-sizing: border-box; }
+    #history { white-space: pre-wrap; overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
@@ -44,7 +45,18 @@
   </section>
 
   <section id="chat" hidden>
-    <p>A placeholder until the TutorSession ticket.</p>
+    <p id="chat-please-sign-in">Sign in to chat with the tutor.</p>
+    <div id="chat-signed-in" hidden>
+      <p id="chat-problem" role="alert" hidden></p>
+      <p><label>Assignment<br><select id="chat-assignment"></select></label></p>
+      <p id="no-assignments" hidden>You have no Assignments to ask about yet.</p>
+      <div id="history" aria-live="polite"></div>
+      <form id="chat-form" hidden>
+        <p><label>Message<br><textarea id="chat-message" required rows="3"></textarea></label></p>
+        <p><label>Text files<br><input id="chat-files" type="file" multiple></label></p>
+        <p><button id="chat-send">Send</button></p>
+      </form>
+    </div>
   </section>
 
   <script>
@@ -74,6 +86,8 @@
       element("signed-in").hidden = !signedIn;
       element("key-form").hidden = !signedIn;
       element("please-sign-in").hidden = signedIn;
+      element("chat-please-sign-in").hidden = signedIn;
+      element("chat-signed-in").hidden = !signedIn;
       frontEnd.hidden = !signedIn;
     }
 
@@ -211,6 +225,8 @@
       // Removing src would leave the page and its token in the hidden iframe.
       frontEnd.src = "about:blank";
       element("clone").hidden = true;
+      element("chat-assignment").replaceChildren();
+      element("history").replaceChildren();
       showSignedIn(false);
     }
 
@@ -248,6 +264,104 @@
       element("chat").hidden = !chat;
       element("assignments-tab").setAttribute("aria-pressed", String(!chat));
       element("chat-tab").setAttribute("aria-pressed", String(chat));
+      if (chat && tokens()) {
+        loadChat();
+      }
+    }
+
+    // Spring's refusals say why in their detail, except a 403, which comes with no body.
+    async function callSpring(path, options = {}) {
+      const response = await fetch(path, {
+        ...options,
+        headers: { ...options.headers, Authorization: `Bearer ${tokens().accessToken}` },
+      });
+      if (response.status === 403) {
+        throw new Error("Chat is for Students a Refresh has added. If you are one, ask your Instructor for a Refresh.");
+      }
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.detail ?? `Spring answered ${response.status}.`);
+      }
+      return response.json();
+    }
+
+    function showChatProblem(message) {
+      element("chat-problem").textContent = message;
+      element("chat-problem").hidden = !message;
+    }
+
+    async function loadChat() {
+      showChatProblem(null);
+      const select = element("chat-assignment");
+      try {
+        const { assignments } = await callSpring("/api/student/assignments");
+        const selected = select.value;
+        select.replaceChildren(
+          ...assignments.map(({ id, title }) => {
+            const option = document.createElement("option");
+            option.value = id;
+            option.textContent = title;
+            return option;
+          }),
+        );
+        if (assignments.some(({ id }) => String(id) === selected)) {
+          select.value = selected;
+        }
+        element("no-assignments").hidden = assignments.length > 0;
+        element("chat-form").hidden = assignments.length === 0;
+        await loadHistory();
+      } catch (error) {
+        element("chat-form").hidden = true;
+        showChatProblem(error.message);
+      }
+    }
+
+    function messagesAddress(assignment) {
+      return `/api/student/assignments/${assignment}/tutor-session/messages`;
+    }
+
+    // Choosing another Assignment while this runs must not show the history of the first one.
+    async function loadHistory() {
+      const assignment = element("chat-assignment").value;
+      element("history").replaceChildren();
+      if (!assignment) {
+        return;
+      }
+      const { messages } = await callSpring(messagesAddress(assignment));
+      if (assignment === element("chat-assignment").value) {
+        element("history").replaceChildren(...messages.map(messageElement));
+      }
+    }
+
+    function messageElement({ role, content, files }) {
+      const paragraph = document.createElement("p");
+      const attached = files?.length ? `\n(attached: ${files.map(({ path }) => path).join(", ")})` : "";
+      paragraph.textContent = `${role === "student" ? "You" : "Tutor"}: ${content}${attached}`;
+      return paragraph;
+    }
+
+    async function sendChatMessage(event) {
+      event.preventDefault();
+      showChatProblem(null);
+      element("chat-send").disabled = true;
+      try {
+        const assignment = element("chat-assignment").value;
+        const files = await Promise.all(
+          [...element("chat-files").files].map(async (file) => ({ path: file.name, content: await file.text() })),
+        );
+        await callSpring(messagesAddress(assignment), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: element("chat-message").value, ...(files.length ? { files } : {}) }),
+        });
+        element("chat-message").value = "";
+        element("chat-files").value = "";
+        await loadHistory();
+      } catch (error) {
+        showChatProblem(error.message);
+      } finally {
+        element("chat-send").disabled = false;
+      }
     }
 
     function randomString() {
@@ -270,6 +384,11 @@
     element("copy").addEventListener("click", copyCloneCommand);
     element("assignments-tab").addEventListener("click", () => showChat(false));
     element("chat-tab").addEventListener("click", () => showChat(true));
+    element("chat-form").addEventListener("submit", sendChatMessage);
+    element("chat-assignment").addEventListener("change", () => {
+      showChatProblem(null);
+      loadHistory().catch((error) => showChatProblem(error.message));
+    });
 
     (async () => {
       const signedInJustNow = new URLSearchParams(location.search).has("code");
