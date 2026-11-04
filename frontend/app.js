@@ -148,13 +148,13 @@ document.addEventListener("alpine:init", () => {
       return classGroup.students.filter((student) => student.studentNumber.toLowerCase().includes(search));
     },
 
-    areVisibleStudentsSelected(classGroup) {
+    areMatchingStudentsSelected(classGroup) {
       return this.matchingStudents(classGroup).every((student) => this.selected.includes(student.sub));
     },
 
-    // With no search active every Student is visible, so this covers the whole ClassGroup.
+    // With no search active every Student matches, so this covers the whole ClassGroup.
     // A Student may be in several ClassGroups, so selection is kept per Student.
-    selectVisibleStudents(classGroup, chosen) {
+    selectMatchingStudents(classGroup, chosen) {
       const subs = this.matchingStudents(classGroup).map((student) => student.sub);
       const others = this.selected.filter((sub) => !subs.includes(sub));
       this.selected = chosen ? [...others, ...subs] : others;
