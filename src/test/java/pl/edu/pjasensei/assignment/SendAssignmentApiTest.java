@@ -6,7 +6,9 @@ import com.jayway.jsonpath.JsonPath;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -17,11 +19,14 @@ import pl.edu.pjasensei.support.IntegrationTest;
 import pl.edu.pjasensei.support.TestCognito;
 import pl.edu.pjasensei.support.TestCognito.Member;
 import pl.edu.pjasensei.support.TestGitea;
+import pl.edu.pjasensei.support.TestGiteaBoundary;
 import pl.edu.pjasensei.support.TestIdentityProvider;
 
 @IntegrationTest
 @TestPropertySource(properties = "pjasensei.assignments.allowed-source-hosts=source.test")
 class SendAssignmentApiTest {
+
+    private static final String MAKING_A_TEMPLATE = "PATCH /api/v1/repos/.*/snapshot-.*\"template\":true";
 
     @Autowired
     RestTestClient http;
@@ -36,7 +41,15 @@ class SendAssignmentApiTest {
     TestGitea gitea;
 
     @Autowired
+    TestGiteaBoundary giteaBoundary;
+
+    @Autowired
     JdbcClient jdbc;
+
+    @AfterEach
+    void letGiteaWorkAgain() {
+        giteaBoundary.reset();
+    }
 
     @Test
     void eachRecipientGetsAPrivateCopyOfTheSourceWithACleanHistory() {
@@ -44,7 +57,7 @@ class SendAssignmentApiTest {
         var source = gitea.newSourceRepository();
 
         var id = created(taught.instructor(), request(source.url(), taught.studentSubs()));
-        repositoriesWith(taught.instructor().token(), id).expectStatus().isNoContent();
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
 
         for (var student : taught.students()) {
             var name = repositoryName(id, student);
@@ -76,7 +89,7 @@ class SendAssignmentApiTest {
         gitea.deleteAccount(student.sub());
         gitea.deleteAccount(taught.instructor().sub());
 
-        repositoriesWith(taught.instructor().token(), id).expectStatus().isNoContent();
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
 
         var name = repositoryName(id, student);
         assertThat(gitea.permission(name, student.sub())).isEqualTo("write");
@@ -128,7 +141,7 @@ class SendAssignmentApiTest {
         var id = created(taught.instructor(), request(source.url(), taught.studentSubs()));
 
         gitea.addFile(source, "between-the-requests.txt", "too late");
-        repositoriesWith(taught.instructor().token(), id).expectStatus().isNoContent();
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
         gitea.addFile(source, "after-the-requests.txt", "too late");
 
         var name = repositoryName(id, student);
@@ -304,6 +317,251 @@ class SendAssignmentApiTest {
         assertThat(gitea.permission(repositoryName(id, leaver), leaver.sub())).isEqualTo("write");
     }
 
+    @Test
+    void aTemporaryFailureFixesItselfWithinThreeAttempts() {
+        var taught = newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+        var name = repositoryName(id, student);
+        giteaBoundary.failNext(2, generating(name));
+
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
+
+        assertThat(giteaBoundary.requestsMatching(generating(name))).isEqualTo(3);
+        assertThat(gitea.fileExists(name, "first.txt")).isTrue();
+        assertThat(gitea.permission(name, student.sub())).isEqualTo("write");
+        assertThat(sshAddressesOf(id)).hasSize(1);
+    }
+
+    @Test
+    void afterThreeAttemptsTheStudentIsNamedAndTheOthersStillGetTheirRepositories() {
+        var taught = newTaughtClassGroup(3);
+        var failing = taught.students().get(0);
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+        var name = repositoryName(id, failing);
+        giteaBoundary.failNext(Integer.MAX_VALUE, generating(name));
+
+        repositoriesWith(taught.instructor().token(), id)
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.failures.length()").isEqualTo(1)
+                .jsonPath("$.failures[0].sub").isEqualTo(failing.sub())
+                .jsonPath("$.failures[0].studentNumber").isEqualTo(failing.username());
+
+        assertThat(giteaBoundary.requestsMatching(generating(name))).isEqualTo(3);
+        assertThat(gitea.repositoryExists(name)).isFalse();
+        assertThat(sshAddressesOf(id)).hasSize(2);
+        assertThat(gitea.repositoryExists(repositoryName(id, taught.students().get(1)))).isTrue();
+        assertThat(gitea.repositoryExists(repositoryName(id, taught.students().get(2)))).isTrue();
+    }
+
+    @Test
+    void aTimeoutOnAnAttemptThatActuallyWorkedCountsAsSuccess() {
+        var taught = newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+        var name = repositoryName(id, student);
+        giteaBoundary.loseAnswerToNext(1, generating(name));
+
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
+
+        assertThat(gitea.fileExists(name, "first.txt")).isTrue();
+        assertThat(gitea.permission(name, student.sub())).isEqualTo("write");
+        assertThat(gitea.permission(name, taught.instructor().sub())).isEqualTo("read");
+        assertThat(sshAddressesOf(id)).containsExactly(gitea.repository(name).path("ssh_url").asString());
+    }
+
+    @Test
+    void aRepositoryAlreadyInGiteaCountsAsSuccessAndAccessIsStillEnsured() {
+        var taught = newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+        var name = repositoryName(id, student);
+        gitea.createRepository(name);
+
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
+
+        assertThat(gitea.permission(name, student.sub())).isEqualTo("write");
+        assertThat(gitea.permission(name, taught.instructor().sub())).isEqualTo("read");
+        assertThat(sshAddressesOf(id)).containsExactly(gitea.repository(name).path("ssh_url").asString());
+    }
+
+    @Test
+    void failingToGrantAccessIsRetriedOnTheRepositoryAlreadyMade() {
+        var taught = newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+        var name = repositoryName(id, student);
+        giteaBoundary.failNext(1, grantingAccessTo(name, student));
+
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
+
+        assertThat(gitea.permission(name, student.sub())).isEqualTo("write");
+        assertThat(sshAddressesOf(id)).hasSize(1);
+    }
+
+    @Test
+    void aMissingAccountIsMadeWithinTheAttemptsWhenMakingItFailsAtFirst() {
+        var taught = newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+        gitea.deleteAccount(student.sub());
+        giteaBoundary.failNext(1, "POST /api/v1/admin/users .*" + student.sub());
+
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
+
+        assertThat(gitea.permission(repositoryName(id, student), student.sub())).isEqualTo("write");
+    }
+
+    @Test
+    void repeatingTheRequestHandlesOnlyRecipientsWithoutARepository() {
+        var taught = newTaughtClassGroup(2);
+        var failing = taught.students().get(0);
+        var finished = taught.students().get(1);
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+        // The repository of the first gets made, but access cannot be given in any attempt.
+        giteaBoundary.failNext(3, grantingAccessTo(repositoryName(id, failing), failing));
+        repositoriesWith(taught.instructor().token(), id)
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.failures[0].sub").isEqualTo(failing.sub());
+        assertThat(gitea.repositoryExists(repositoryName(id, failing))).isTrue();
+        assertThat(sshAddressesOf(id)).hasSize(1);
+        giteaBoundary.reset();
+
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
+
+        assertThat(gitea.permission(repositoryName(id, failing), failing.sub())).isEqualTo("write");
+        assertThat(sshAddressesOf(id)).hasSize(2);
+        assertThat(giteaBoundary.requestsMatching(generating(repositoryName(id, failing)))).isEqualTo(1);
+        assertThat(giteaBoundary.requestsMatching(generating(repositoryName(id, finished)))).isZero();
+        assertThat(giteaBoundary.requestsMatching(grantingAccessTo(repositoryName(id, finished), finished))).isZero();
+    }
+
+    @Test
+    void repeatingTheRequestWhenEveryoneHasARepositoryAsksGiteaForNothing() {
+        var taught = newTaughtClassGroup(1);
+        var id = sent(taught.instructor(), gitea.newSourceRepository().url(), taught.studentSubs());
+        var addresses = sshAddressesOf(id);
+        giteaBoundary.reset();
+
+        expectNoFailures(repositoriesWith(taught.instructor().token(), id));
+
+        assertThat(giteaBoundary.requestsMatching(".")).isZero();
+        assertThat(sshAddressesOf(id)).isEqualTo(addresses);
+    }
+
+    @Test
+    void twoRequestsAtTheSameTimeBothSucceedAndEachStudentGetsOneRepository() {
+        var taught = newTaughtClassGroup(5);
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+
+        var requests = Stream.generate(() -> CompletableFuture.runAsync(
+                        () -> expectNoFailures(repositoriesWith(taught.instructor().token(), id))))
+                .limit(2)
+                .toList();
+        requests.forEach(CompletableFuture::join);
+
+        assertThat(sshAddressesOf(id)).hasSize(5);
+    }
+
+    @Test
+    void aStudentNumberDifferingOnlyInCaseNeverGivesAccessToTheRepositoryOfAnotherStudent() {
+        var number = UUID.randomUUID().toString().replace("-", "");
+        var lower = new Member("s" + number, UUID.randomUUID().toString(), "s" + number + "@mail.com");
+        var upper = new Member("S" + number, UUID.randomUUID().toString(), "S" + number + "@mail.com");
+        int group = cognito.newGroupNumber();
+        cognito.setGroup(group + "c", List.of(lower, upper));
+        var instructor = newInstructor(group + "w");
+        var id = created(instructor, request(gitea.newSourceRepository().url(), List.of(lower.sub(), upper.sub())));
+
+        String failed = JsonPath.read(
+                repositoriesWith(instructor.token(), id)
+                        .expectStatus().isOk()
+                        .expectBody(String.class).returnResult().getResponseBody(),
+                "$.failures[0].sub");
+
+        var made = failed.equals(lower.sub()) ? upper : lower;
+        assertThat(gitea.collaborators(repositoryName(id, made))).containsExactlyInAnyOrder(made.sub(), instructor.sub());
+        assertThat(sshAddressesOf(id)).hasSize(1);
+    }
+
+    @Test
+    void aFailureAfterTheCopyDoesNotBlameTheUrlAndLeavesNoSnapshot() {
+        var taught = newTaughtClassGroup(1);
+        var url = gitea.newSourceRepository().url();
+        var snapshots = gitea.snapshotCount();
+        giteaBoundary.failNext(1, MAKING_A_TEMPLATE);
+
+        var detail = JsonPath.<String>read(
+                createWith(taught.instructor().token(), request(url, taught.studentSubs()))
+                        .expectStatus().isEqualTo(502)
+                        .expectBody(String.class).returnResult().getResponseBody(),
+                "$.detail");
+
+        assertThat(detail).doesNotContain("URL");
+        assertThat(assignmentsFrom(url)).isZero();
+        assertThat(gitea.snapshotCount()).isEqualTo(snapshots);
+    }
+
+    @Test
+    void theInstructorHearsTheSameWhenTheSnapshotCannotBeRemovedEither() {
+        var taught = newTaughtClassGroup(1);
+        var url = gitea.newSourceRepository().url();
+        giteaBoundary.failNext(1, MAKING_A_TEMPLATE);
+        giteaBoundary.failNext(1, "DELETE /api/v1/repos/.*/snapshot-");
+
+        var detail = JsonPath.<String>read(
+                createWith(taught.instructor().token(), request(url, taught.studentSubs()))
+                        .expectStatus().isEqualTo(502)
+                        .expectBody(String.class).returnResult().getResponseBody(),
+                "$.detail");
+
+        assertThat(detail).doesNotContain("URL");
+        assertThat(assignmentsFrom(url)).isZero();
+    }
+
+    @Test
+    void anImportWhoseAnswerIsLostLeavesNoSnapshot() {
+        var taught = newTaughtClassGroup(1);
+        var url = gitea.newSourceRepository().url();
+        var snapshots = gitea.snapshotCount();
+        giteaBoundary.loseAnswerToNext(1, "POST /api/v1/repos/migrate ");
+
+        createWith(taught.instructor().token(), request(url, taught.studentSubs()))
+                .expectStatus().isEqualTo(502);
+
+        assertThat(assignmentsFrom(url)).isZero();
+        assertThat(gitea.snapshotCount()).isEqualTo(snapshots);
+    }
+
+    @Test
+    void anAssignmentThatCannotBeSavedLeavesNoSnapshot() {
+        var taught = newTaughtClassGroup(1);
+        var url = gitea.newSourceRepository().url();
+        var snapshots = gitea.snapshotCount();
+
+        // Postgres refuses this character in text, after everything before the save has worked.
+        createWith(
+                        taught.instructor().token(),
+                        Map.of("title", "Sor\u0000ting", "sourceUrl", url, "recipients", taught.studentSubs()))
+                .expectStatus().is5xxServerError();
+
+        assertThat(assignmentsFrom(url)).isZero();
+        assertThat(gitea.snapshotCount()).isEqualTo(snapshots);
+    }
+
+    private static String grantingAccessTo(String repositoryName, Member student) {
+        return "PUT /api/v1/repos/.*/%s/collaborators/%s ".formatted(repositoryName, student.sub());
+    }
+
+    private static String generating(String repositoryName) {
+        return "POST /api/v1/repos/.*/generate .*\"name\":\"" + repositoryName + "\"";
+    }
+
+    private static void expectNoFailures(RestTestClient.ResponseSpec response) {
+        response.expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
+    }
+
     private static String repositoryName(int assignment, Member student) {
         return "assignment-%d-%s".formatted(assignment, student.username());
     }
@@ -331,7 +589,7 @@ class SendAssignmentApiTest {
 
     private int sent(Instructor instructor, String sourceUrl, List<String> recipients) {
         var id = created(instructor, request(sourceUrl, recipients));
-        repositoriesWith(instructor.token(), id).expectStatus().isNoContent();
+        expectNoFailures(repositoriesWith(instructor.token(), id));
         return id;
     }
 

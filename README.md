@@ -64,7 +64,9 @@ Two seeded cases show failures on purpose. Refresh as `anowak` lists `s18003`, w
 An Instructor enters a title and the HTTPS URL of a public repository on a host in `SOURCE_REPOSITORY_HOSTS`, chooses Students of the ClassGroups they teach, and sends. The front end makes two requests:
 
 1. `POST /api/assignments`, with `{ "title", "sourceUrl", "recipients": [<sub>] }`, copies the SourceRepository once into a private snapshot in Gitea and keeps the Assignment. If the copy fails, it answers with an error and keeps nothing. Refusals explain themselves in `detail`.
-2. `POST /api/assignments/{id}/repositories`, allowed only for the Instructor who sent it, makes each StudentRepository from the snapshot with a clean history.
+2. `POST /api/assignments/{id}/repositories`, allowed only for the Instructor who sent it, makes each StudentRepository from the snapshot with a clean history, with up to three attempts for each. It answers `{ "failures": [{ "sub", "studentNumber" }] }`, naming the Students still without one, and the front end shows them in a prompt.
+
+The second request is safe to repeat: it handles only recipients without a StudentRepository. A repository Gitea already has, for example after a timeout on an attempt that actually worked, counts as made, and access is still given. There is no retry control and nothing runs in the background, so a recipient who was not handled simply has no repository.
 
 Spring's own Gitea account owns every snapshot and StudentRepository. A repository is named like `assignment-17-s12345`, is private, and has two collaborators: the Student with write access and the sending Instructor with read access.
 
@@ -93,4 +95,4 @@ Tests need Docker too: they start Spring against real Postgres and real Gitea wi
 ./gradlew test
 ```
 
-Annotate a test class with `@IntegrationTest` and inject a `RestTestClient` to exercise the HTTP API, a `TestIdentityProvider` to sign tokens for it, a `TestCognito` to set what the Cognito API answers, and a `TestGitea` to look at Gitea from outside Spring. The test Gitea uses the same `docker/gitea` config and provisioning script as the stack. It imports only from `source.test`, an HTTPS proxy in front of itself, so a test can create a SourceRepository with `TestGitea` and change it later. To use it, a test sets `pjasensei.assignments.allowed-source-hosts=source.test`.
+Annotate a test class with `@IntegrationTest` and inject a `RestTestClient` to exercise the HTTP API, a `TestIdentityProvider` to sign tokens for it, a `TestCognito` to set what the Cognito API answers, a `TestGitea` to look at Gitea from outside Spring, and a `TestGiteaBoundary` to make Gitea fail for Spring's requests, which all pass through it. The test Gitea uses the same `docker/gitea` config and provisioning script as the stack. It imports only from `source.test`, an HTTPS proxy in front of itself, so a test can create a SourceRepository with `TestGitea` and change it later. To use it, a test sets `pjasensei.assignments.allowed-source-hosts=source.test`.
