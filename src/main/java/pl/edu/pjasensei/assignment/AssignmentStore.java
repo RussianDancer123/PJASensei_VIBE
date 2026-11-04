@@ -103,14 +103,15 @@ class AssignmentStore {
                 .optional();
     }
 
-    /** The newest first, only those this Instructor sent. */
-    List<AssignmentSummary> assignmentsOf(String instructorSub) {
+    /** The newest first. */
+    List<AssignmentSummary> assignmentsSentBy(String instructorSub) {
         return jdbc.sql("SELECT id, title FROM assignments WHERE instructor_sub = ? ORDER BY id DESC")
                 .param(instructorSub)
                 .query(AssignmentSummary.class)
                 .list();
     }
 
+    /** The title of an Assignment, if this Instructor is the one who sent it. */
     Optional<String> titleOf(long assignment, String instructorSub) {
         return jdbc.sql("SELECT title FROM assignments WHERE id = ? AND instructor_sub = ?")
                 .params(assignment, instructorSub)
@@ -119,7 +120,7 @@ class AssignmentStore {
     }
 
     /** Every recipient, with the SSH address of their StudentRepository or null if they have none. */
-    List<RecipientRepository> recipientRepositoriesOf(long assignment) {
+    List<RecipientAddress> recipientAddressesOf(long assignment) {
         return jdbc.sql("""
                         SELECT s.sub, s.student_number, sr.ssh_url
                         FROM assignment_recipients r
@@ -130,13 +131,13 @@ class AssignmentStore {
                         ORDER BY s.student_number
                         """)
                 .param(assignment)
-                .query(RecipientRepository.class)
+                .query(RecipientAddress.class)
                 .list();
     }
 
     record Recipient(String sub, String studentNumber) {}
 
-    record RecipientRepository(String sub, String studentNumber, String sshUrl) {}
+    record RecipientAddress(String sub, String studentNumber, String sshUrl) {}
 
     record AssignmentSummary(long id, String title) {}
 

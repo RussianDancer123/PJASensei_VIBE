@@ -24,14 +24,14 @@ class InstructorWorkController {
 
     @GetMapping("/api/assignments")
     Assignments list(JwtAuthenticationToken authentication) {
-        return new Assignments(store.assignmentsOf(authentication.getName()));
+        return new Assignments(store.assignmentsSentBy(authentication.getName()));
     }
 
     @GetMapping("/api/assignments/{id}")
-    Detail open(@PathVariable long id, JwtAuthenticationToken authentication) {
+    OpenedAssignment open(@PathVariable long id, JwtAuthenticationToken authentication) {
         var title = store.titleOf(id, authentication.getName())
-                .orElseThrow(() -> new AssignmentRefused(HttpStatus.NOT_FOUND, "You have no such Assignment."));
-        return new Detail(id, title, store.recipientRepositoriesOf(id));
+                .orElseThrow(() -> new AssignmentRefused(HttpStatus.NOT_FOUND, "You sent no such Assignment."));
+        return new OpenedAssignment(id, title, store.recipientAddressesOf(id));
     }
 
     @ExceptionHandler
@@ -42,5 +42,5 @@ class InstructorWorkController {
     record Assignments(List<AssignmentStore.AssignmentSummary> assignments) {}
 
     /** A recipient without a StudentRepository has a null {@code sshUrl}. */
-    record Detail(long id, String title, List<AssignmentStore.RecipientRepository> recipients) {}
+    record OpenedAssignment(long id, String title, List<AssignmentStore.RecipientAddress> recipients) {}
 }

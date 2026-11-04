@@ -41,8 +41,10 @@ document.addEventListener("alpine:init", () => {
       return this.me?.roles.includes("STUDENT");
     },
 
-    // The Assignment is already sent by now, so a failure here must not read as a failed send.
+    // Kept apart from what called it: a failure here is neither a failed send nor a reason to hide
+    // the Assignments of someone who is also a Student.
     async reloadSentAssignments() {
+      this.browseError = null;
       try {
         this.sentAssignments = await fetchSentAssignments();
       } catch (error) {
@@ -190,7 +192,7 @@ document.addEventListener("alpine:init", () => {
         this.me = await fetchMe();
         if (this.isInstructor) {
           this.classGroups = await fetchClassGroups();
-          this.sentAssignments = await fetchSentAssignments();
+          await this.reloadSentAssignments();
         }
         if (this.isStudent) {
           this.assignments = await fetchStudentAssignments();
