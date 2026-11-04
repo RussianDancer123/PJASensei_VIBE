@@ -21,6 +21,9 @@ document.addEventListener("alpine:init", () => {
     sendError: null,
     studentNumbersWithoutRepository: [],
     assignments: [],
+    sentAssignments: [],
+    openedAssignment: null,
+    browseError: null,
     preview: null,
     cloneCommand: null,
     copied: false,
@@ -36,6 +39,29 @@ document.addEventListener("alpine:init", () => {
 
     get isStudent() {
       return this.me?.roles.includes("STUDENT");
+    },
+
+    // The Assignment is already sent by now, so a failure here must not read as a failed send.
+    async reloadSentAssignments() {
+      try {
+        this.sentAssignments = await fetchSentAssignments();
+      } catch (error) {
+        this.browseError = error.message;
+      }
+    },
+
+    async openSentAssignment(id) {
+      this.browseError = null;
+      this.openedAssignment = null;
+      try {
+        const response = await callApi(`/api/assignments/${id}`);
+        if (!response.ok) {
+          throw new Error(await reasonFrom(response));
+        }
+        this.openedAssignment = await response.json();
+      } catch (error) {
+        this.browseError = error.message;
+      }
     },
 
     async openPreview(id) {
@@ -150,6 +176,7 @@ document.addEventListener("alpine:init", () => {
         const { failures } = await repositories.json();
         this.studentNumbersWithoutRepository = failures.map((failure) => failure.studentNumber);
         this.sentMessage = `Sent "${title}" to ${recipientCount - failures.length} of ${recipientCount} Student(s).`;
+        await this.reloadSentAssignments();
       } catch (error) {
         this.sendError = error.message;
       } finally {
@@ -163,6 +190,7 @@ document.addEventListener("alpine:init", () => {
         this.me = await fetchMe();
         if (this.isInstructor) {
           this.classGroups = await fetchClassGroups();
+          this.sentAssignments = await fetchSentAssignments();
         }
         if (this.isStudent) {
           this.assignments = await fetchStudentAssignments();
@@ -198,6 +226,9 @@ document.addEventListener("alpine:init", () => {
       this.sendError = null;
       this.studentNumbersWithoutRepository = [];
       this.assignments = [];
+      this.sentAssignments = [];
+      this.openedAssignment = null;
+      this.browseError = null;
       this.preview = null;
       this.cloneCommand = null;
       this.copied = false;
@@ -311,6 +342,18 @@ async function fetchClassGroups() {
     throw new Error(`Spring answered ${response.status}.`);
   }
   return (await response.json()).classGroups;
+}
+
+// An Instructor Refresh has not added yet is refused, and simply has nothing to show so far.
+async function fetchSentAssignments() {
+  const response = await callApi("/api/assignments");
+  if (response.status === 403) {
+    return [];
+  }
+  if (!response.ok) {
+    throw new Error(`Spring answered ${response.status}.`);
+  }
+  return (await response.json()).assignments;
 }
 
 // A Student no Refresh has added yet is refused, and simply has nothing to show so far.

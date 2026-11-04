@@ -103,7 +103,40 @@ class AssignmentStore {
                 .optional();
     }
 
+    /** The newest first, only those this Instructor sent. */
+    List<AssignmentSummary> assignmentsOf(String instructorSub) {
+        return jdbc.sql("SELECT id, title FROM assignments WHERE instructor_sub = ? ORDER BY id DESC")
+                .param(instructorSub)
+                .query(AssignmentSummary.class)
+                .list();
+    }
+
+    Optional<String> titleOf(long assignment, String instructorSub) {
+        return jdbc.sql("SELECT title FROM assignments WHERE id = ? AND instructor_sub = ?")
+                .params(assignment, instructorSub)
+                .query(String.class)
+                .optional();
+    }
+
+    /** Every recipient, with the SSH address of their StudentRepository or null if they have none. */
+    List<RecipientRepository> recipientRepositoriesOf(long assignment) {
+        return jdbc.sql("""
+                        SELECT s.sub, s.student_number, sr.ssh_url
+                        FROM assignment_recipients r
+                        JOIN students s ON s.sub = r.student_sub
+                        LEFT JOIN student_repositories sr
+                            ON sr.assignment_id = r.assignment_id AND sr.student_sub = r.student_sub
+                        WHERE r.assignment_id = ?
+                        ORDER BY s.student_number
+                        """)
+                .param(assignment)
+                .query(RecipientRepository.class)
+                .list();
+    }
+
     record Recipient(String sub, String studentNumber) {}
+
+    record RecipientRepository(String sub, String studentNumber, String sshUrl) {}
 
     record AssignmentSummary(long id, String title) {}
 

@@ -116,6 +116,32 @@
           <p x-show="studentNumbersWithoutRepository.length > 0" role="alert"
              x-text="`No StudentRepository could be made for: ${studentNumbersWithoutRepository.join(', ')}.`"></p>
         </section>
+
+        <section x-show="isInstructor">
+          <h2>My sent Assignments</h2>
+          <p x-show="sentAssignments.length === 0">You have not sent any Assignments yet.</p>
+          <ul>
+            <template x-for="assignment in sentAssignments" :key="assignment.id">
+              <li><button @click="openSentAssignment(assignment.id)" x-text="assignment.title"></button></li>
+            </template>
+          </ul>
+
+          <template x-if="openedAssignment">
+            <article>
+              <h3 x-text="openedAssignment.title"></h3>
+              <ul>
+                <template x-for="recipient in openedAssignment.recipients" :key="recipient.sub">
+                  <li>
+                    <strong x-text="recipient.studentNumber"></strong>:
+                    <code x-show="recipient.sshUrl" x-text="recipient.sshUrl"></code>
+                    <span x-show="!recipient.sshUrl">no repository</span>
+                  </li>
+                </template>
+              </ul>
+            </article>
+          </template>
+          <p x-show="browseError" role="alert" x-text="browseError"></p>
+        </section>
       </div>
     </template>
     <button x-show="!me && !loading" @click="signIn">Sign in</button>

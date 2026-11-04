@@ -109,6 +109,55 @@ class GitOverSshTest {
         assertThat(gitea.fileExists(ownersRepository, "written-by-the-other-student.txt")).isFalse();
     }
 
+    @Test
+    void anInstructorClonesButCannotPushToTheStudentRepositoriesOfTheirAssignment() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(student));
+        var computer = registeredComputerOf(taught.instructor());
+        var address = instructorSshAddress(taught.instructor(), id, student);
+
+        var cloned = computer.gitClone(address, "review");
+        assertThat(cloned.succeeded()).as(cloned.toString()).isTrue();
+        assertThat(computers.resolve(taught.instructor().sub()).resolve("review/first.txt")).exists();
+
+        var pushed = computer.pushNewFile("review", "instructor.txt");
+        assertThat(pushed.succeeded()).as(pushed.toString()).isFalse();
+        // A reader of the repository gets this from Gitea's hook, not the "not authorized" of a stranger.
+        assertThat(pushed.output()).contains("permission denied for writing");
+        assertThat(gitea.fileExists(Classroom.studentRepositoryName(id, student), "instructor.txt"))
+                .isFalse();
+    }
+
+    @Test
+    void anInstructorCannotCloneTheStudentRepositoriesOfAssignmentsOfAnotherInstructor() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var rival = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        var url = gitea.newSourceRepository().url();
+        int id = classroom.send(taught.instructor(), "Sorting", url, List.of(student));
+        classroom.send(rival.instructor(), "Graphs", url, rival.students());
+        var address = instructorSshAddress(taught.instructor(), id, student);
+        var rivalsComputer = registeredComputerOf(rival.instructor());
+
+        var cloned = rivalsComputer.gitClone(address, "stolen");
+
+        assertThat(cloned.succeeded()).as(cloned.toString()).isFalse();
+        assertThat(cloned.output()).contains("is not authorized to read");
+    }
+
+    private String instructorSshAddress(Person instructor, int assignment, Person student) {
+        List<String> addresses = JsonPath.read(
+                http.get().uri("/api/assignments/{id}", assignment)
+                        .header("Authorization", "Bearer " + instructor.token())
+                        .exchange()
+                        .expectStatus().isOk()
+                        .expectBody(String.class).returnResult().getResponseBody(),
+                "$.recipients[?(@.sub == '%s')].sshUrl".formatted(student.sub()));
+        return addresses.getFirst();
+    }
+
     private String sshAddress(Person student, int assignment) {
         return JsonPath.read(
                 http.get().uri("/api/student/assignments/{id}/ssh-address", assignment)

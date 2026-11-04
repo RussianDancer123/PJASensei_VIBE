@@ -70,6 +70,17 @@ The second request is safe to repeat: it handles only recipients without a Stude
 
 Spring's own Gitea account owns every snapshot and StudentRepository. A repository is named like `assignment-17-s12345`, is private, and has two collaborators: the Student with write access and the sending Instructor with read access.
 
+## Instructor browsing
+
+An Instructor's own routes need the Instructor role, and an Assignment sent by someone else answers with a 404:
+
+| Route                       | Answer                                                                                              |
+| --------------------------- | --------------------------------------------------------------------------------------------------- |
+| `GET /api/assignments`      | `{ "assignments": [{ "id", "title" }] }`, the newest first                                          |
+| `GET /api/assignments/{id}` | `{ "id", "title", "recipients": [{ "sub", "studentNumber", "sshUrl" }] }`, by Student Number        |
+
+`sshUrl` is `null` for a recipient with no StudentRepository, and the front end shows "no repository". There are no pulled, submitted or done statuses. With an SSH key registered (see below), the Instructor can clone any StudentRepository of their Assignments, but not push to it.
+
 ## Student work
 
 Anyone in the database can add SSH public keys, on the front end or with `POST /api/ssh-keys` and `{ "publicKey" }`. A person may have several. A key goes on their own technical Gitea account, which is made if missing. Adding the same key again changes nothing, so a plugin can do it at every start. A key must be one line, as in a `.pub` file. Anything else, or an invalid key, is refused with a 400, and a key already registered to someone else with a 409.
