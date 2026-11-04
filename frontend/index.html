@@ -93,8 +93,8 @@
                 <summary>
                   <label>
                     <input type="checkbox"
-                           :checked="isWholeClassGroupSelected(classGroup)"
-                           @change="selectWholeClassGroup(classGroup, $event.target.checked)">
+                           :checked="areVisibleStudentsSelected(classGroup)"
+                           @change="selectVisibleStudents(classGroup, $event.target.checked)">
                     <span x-text="`${classGroup.name} (${classGroup.students.length})`"></span>
                   </label>
                 </summary>
