@@ -12,7 +12,9 @@ What an IDE plugin has to do to work with PJASensei. `/plugin-mock` (`mocks/plug
 
 The iframe URL is the address of the front end with the query parameter `embedded`, for example `https://pjasensei.example/?embedded=1`. In this mode the front end starts no sign-in of its own, has no sign-in or sign-out buttons, and keeps the token in memory only.
 
-To be allowed to embed it, the plugin's exact origin must be listed in `FRAME_ANCESTORS`, for example `FRAME_ANCESTORS="https://plugin.example"`. To call Spring from that origin, it must also be in `CORS_ALLOWED_ORIGINS`. A wildcard in `FRAME_ANCESTORS` lets a page embed the front end, but the front end will not talk to it.
+To be allowed to embed it, the plugin's exact origin must be listed in `FRAME_ANCESTORS`, for example `FRAME_ANCESTORS="https://plugin.example"`. To call Spring from that origin, it must also be in `CORS_ALLOWED_ORIGINS`. Only a source written as a full `http` or `https` origin counts for messages. Anything else in `FRAME_ANCESTORS`, such as a wildcard, a bare host or a custom scheme like `vscode-webview://`, may let a page embed the front end, but the front end will not talk to it.
+
+The plugin is configured with the issuer and client ID itself. The plugin mock reads them from `/config.json` only because it shares Caddy's origin.
 
 ## Messages
 

@@ -44,7 +44,7 @@
   </section>
 
   <section id="chat" hidden>
-    <p>The chat comes with the TutorSession ticket.</p>
+    <p>A placeholder until the TutorSession ticket.</p>
   </section>
 
   <script>
@@ -186,7 +186,7 @@
       renewalTimer = setTimeout(renew, Math.max(expiresAt - Date.now() - RENEW_BEFORE_EXPIRY_MS, 0));
     }
 
-    // Fails when the mock has restarted and forgotten the refresh token, so the sign-in is over.
+    // Any failure ends the sign-in, typically a restarted mock that has forgotten the refresh token.
     async function renew() {
       showProblem(null);
       try {
@@ -208,7 +208,8 @@
     function signOut() {
       clearTimeout(renewalTimer);
       sessionStorage.removeItem(TOKENS_KEY);
-      frontEnd.removeAttribute("src");
+      // Removing src would leave the page and its token in the hidden iframe.
+      frontEnd.src = "about:blank";
       element("clone").hidden = true;
       showSignedIn(false);
     }
@@ -242,7 +243,7 @@
       }
     }
 
-    function showTab(chat) {
+    function showChat(chat) {
       element("assignments").hidden = chat;
       element("chat").hidden = !chat;
       element("assignments-tab").setAttribute("aria-pressed", String(!chat));
@@ -267,14 +268,20 @@
     element("sign-out").addEventListener("click", signOut);
     element("key-form").addEventListener("submit", registerKey);
     element("copy").addEventListener("click", copyCloneCommand);
-    element("assignments-tab").addEventListener("click", () => showTab(false));
-    element("chat-tab").addEventListener("click", () => showTab(true));
+    element("assignments-tab").addEventListener("click", () => showChat(false));
+    element("chat-tab").addEventListener("click", () => showChat(true));
 
     (async () => {
+      const signedInJustNow = new URLSearchParams(location.search).has("code");
       try {
         await completeSignIn();
       } catch (error) {
         showProblem(error.message);
+      }
+      // A token kept from before a reload may be from before a restart of the mock, which no longer
+      // accepts it, and the front end has no way to say so. A sign-in has only just got its token.
+      if (tokens() && !signedInJustNow) {
+        await renew();
       }
       const current = tokens();
       showSignedIn(Boolean(current));

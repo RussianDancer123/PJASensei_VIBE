@@ -34,7 +34,7 @@ async function handleMockIdp(request, response, pathname) {
     case "POST /login":
       return logIn(request, response);
     case "POST /oauth2/token":
-      return exchangeCode(request, response);
+      return issueTokens(request, response);
     // The AWS SDK adds a slash to the path of an endpoint override.
     case "POST /cognito-api":
     case "POST /cognito-api/":
@@ -120,7 +120,7 @@ async function logIn(request, response) {
   response.end();
 }
 
-async function exchangeCode(request, response) {
+async function issueTokens(request, response) {
   const form = await readForm(request);
   if (form.get("client_id") !== clientId) {
     return sendJson(response, 400, { error: "invalid_client" });

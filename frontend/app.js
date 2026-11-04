@@ -373,13 +373,15 @@ function currentToken() {
 }
 
 // Who may embed this page is also who may talk to it. A CSP source that is not one exact origin,
-// such as a wildcard, cannot be compared with the origin of a message, so it counts for nothing here.
+// such as a wildcard or a bare host, cannot be compared with the origin of a message, so it counts
+// for nothing here. Such a source parses to the origin "null", which postMessage refuses as a target.
 function originsOf(frameAncestors) {
   return frameAncestors.split(/\s+/).flatMap((source) => {
     if (source === "'self'") {
       return [location.origin];
     }
-    return URL.canParse(source) && !source.includes("*") ? [new URL(source).origin] : [];
+    const origin = URL.canParse(source) ? new URL(source).origin : "null";
+    return origin !== "null" && !source.includes("*") ? [origin] : [];
   });
 }
 
@@ -395,8 +397,11 @@ async function fetchMe() {
   }
   const response = await fetch("/api/me", { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401) {
-    // Expired or no longer accepted: back to the sign-in button, or to waiting for the plugin.
-    pluginToken = null;
+    // Expired or no longer accepted: back to the sign-in button, or to waiting for the plugin. A
+    // renewed token may have arrived during this request, and that one is still good.
+    if (pluginToken === token) {
+      pluginToken = null;
+    }
     sessionStorage.removeItem(TOKEN_KEY);
     return null;
   }
