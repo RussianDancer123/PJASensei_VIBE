@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Plugin mock</title>
+  <style>
+    body { max-width: 26rem; margin: 0.5rem; }
+    iframe { width: 100%; height: 40rem; border: 1px solid; box-sizing: border-box; }
+    textarea, input { width: 100%; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <h1>Plugin mock</h1>
+  <p id="problem" role="alert" hidden></p>
+
+  <button id="sign-in" hidden>Sign in</button>
+  <p id="signed-in" hidden>
+    Signed in.
+    <button id="renew">Renew token</button>
+    <button id="sign-out">Sign out</button>
+  </p>
+
+  <nav>
+    <button id="assignments-tab" aria-pressed="true">Assignments</button>
+    <button id="chat-tab" aria-pressed="false">Chat</button>
+  </nav>
+
+  <section id="assignments">
+    <div id="clone" hidden>
+      <h2>Clone</h2>
+      <p>Assignment <span id="clone-assignment"></span></p>
+      <p><input id="clone-command" type="text" readonly aria-label="Clone command"></p>
+      <button id="copy">Copy</button>
+    </div>
+
+    <form id="key-form" hidden>
+      <h2>SSH key</h2>
+      <p><label>Public key (the contents of a .pub file)<br><textarea id="public-key" required rows="3"></textarea></label></p>
+      <p><button>Register key</button> <span id="key-result" role="status"></span></p>
+    </form>
+
+    <iframe id="front-end" title="PJASensei front end" hidden></iframe>
+    <p id="please-sign-in">Sign in to see your Assignments.</p>
+  </section>
+
+  <section id="chat" hidden>
+    <p>The chat comes with the TutorSession ticket.</p>
+  </section>
+
+  <script>
+    // Stands in for the IDE plugin, keeping to docs/plugin-contract.md. Unlike a real plugin it shares
+    // Caddy's origin, so the addresses come from here and it has to keep its storage keys its own.
+    const TOKENS_KEY = "pjasensei.pluginMock.tokens";
+    const PENDING_SIGN_IN_KEY = "pjasensei.pluginMock.pendingSignIn";
+    const FRONT_END_ORIGIN = location.origin;
+    const REDIRECT_URI = `${location.origin}/plugin-mock/`;
+    const RENEW_BEFORE_EXPIRY_MS = 60_000;
+
+    const element = (id) => document.getElementById(id);
+    const frontEnd = element("front-end");
+    let renewalTimer = null;
+
+    function tokens() {
+      return JSON.parse(sessionStorage.getItem(TOKENS_KEY));
+    }
+
+    function showProblem(message) {
+      element("problem").textContent = message;
+      element("problem").hidden = !message;
+    }
+
+    function showSignedIn(signedIn) {
+      element("sign-in").hidden = signedIn;
+      element("signed-in").hidden = !signedIn;
+      element("key-form").hidden = !signedIn;
+      element("please-sign-in").hidden = signedIn;
+      frontEnd.hidden = !signedIn;
+    }
+
+    // Both checks of the contract: the expected window and the expected origin.
+    window.addEventListener("message", (event) => {
+      if (event.source !== frontEnd.contentWindow || event.origin !== FRONT_END_ORIGIN) {
+        return;
+      }
+      if (event.data?.type === "ready") {
+        sendTokenToFrontEnd();
+      } else if (event.data?.type === "clone") {
+        element("clone-assignment").textContent = event.data.assignmentId;
+        element("clone-command").value = `git clone ${event.data.sshUrl}`;
+        element("copy").textContent = "Copy";
+        element("clone").hidden = false;
+      }
+    });
+
+    function sendTokenToFrontEnd() {
+      const current = tokens();
+      if (current) {
+        frontEnd.contentWindow.postMessage({ type: "token", accessToken: current.accessToken }, FRONT_END_ORIGIN);
+      }
+    }
+
+    async function identityProvider() {
+      const { issuer, clientId } = await getJson("/config.json");
+      return { clientId, ...(await getJson(`${issuer}/.well-known/openid-configuration`)) };
+    }
+
+    async function getJson(url) {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`${url} answered ${response.status}.`);
+      }
+      return response.json();
+    }
+
+    async function startSignIn() {
+      const { clientId, authorization_endpoint: authorizationEndpoint } = await identityProvider();
+      const state = randomString();
+      const codeVerifier = randomString();
+      sessionStorage.setItem(PENDING_SIGN_IN_KEY, JSON.stringify({ state, codeVerifier }));
+
+      const url = new URL(authorizationEndpoint);
+      url.search = new URLSearchParams({
+        response_type: "code",
+        client_id: clientId,
+        redirect_uri: REDIRECT_URI,
+        scope: "openid",
+        state,
+        code_challenge: await challengeOf(codeVerifier),
+        code_challenge_method: "S256",
+      });
+      location.assign(url);
+    }
+
+    async function completeSignIn() {
+      const params = new URLSearchParams(location.search);
+      if (!params.has("code") && !params.has("error")) {
+        return;
+      }
+      const pending = JSON.parse(sessionStorage.getItem(PENDING_SIGN_IN_KEY));
+      sessionStorage.removeItem(PENDING_SIGN_IN_KEY);
+      history.replaceState(null, "", location.pathname);
+
+      if (params.has("error")) {
+        throw new Error(`Sign-in failed: ${params.get("error_description") ?? params.get("error")}`);
+      }
+      if (pending?.state !== params.get("state")) {
+        throw new Error("Sign-in failed: the answer does not belong to this tab. Please try again.");
+      }
+      const { clientId, token_endpoint: tokenEndpoint } = await identityProvider();
+      keepTokens(
+        await requestTokens(tokenEndpoint, {
+          grant_type: "authorization_code",
+          client_id: clientId,
+          code: params.get("code"),
+          redirect_uri: REDIRECT_URI,
+          code_verifier: pending.codeVerifier,
+        }),
+      );
+    }
+
+    async function requestTokens(tokenEndpoint, form) {
+      const response = await fetch(tokenEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(form),
+      });
+      if (!response.ok) {
+        throw new Error(`The identity provider answered ${response.status}.`);
+      }
+      return response.json();
+    }
+
+    // A renewal brings no refresh token, so the one from sign-in stays.
+    function keepTokens({ access_token: accessToken, refresh_token: refreshToken, expires_in: expiresIn }) {
+      const kept = {
+        accessToken,
+        refreshToken: refreshToken ?? tokens().refreshToken,
+        expiresAt: Date.now() + expiresIn * 1000,
+      };
+      sessionStorage.setItem(TOKENS_KEY, JSON.stringify(kept));
+      scheduleRenewal(kept);
+    }
+
+    function scheduleRenewal({ expiresAt }) {
+      clearTimeout(renewalTimer);
+      renewalTimer = setTimeout(renew, Math.max(expiresAt - Date.now() - RENEW_BEFORE_EXPIRY_MS, 0));
+    }
+
+    // Fails when the mock has restarted and forgotten the refresh token, so the sign-in is over.
+    async function renew() {
+      showProblem(null);
+      try {
+        const { clientId, token_endpoint: tokenEndpoint } = await identityProvider();
+        keepTokens(
+          await requestTokens(tokenEndpoint, {
+            grant_type: "refresh_token",
+            client_id: clientId,
+            refresh_token: tokens().refreshToken,
+          }),
+        );
+        sendTokenToFrontEnd();
+      } catch (error) {
+        signOut();
+        showProblem(`The token could not be renewed, so please sign in again. ${error.message}`);
+      }
+    }
+
+    function signOut() {
+      clearTimeout(renewalTimer);
+      sessionStorage.removeItem(TOKENS_KEY);
+      frontEnd.removeAttribute("src");
+      element("clone").hidden = true;
+      showSignedIn(false);
+    }
+
+    async function registerKey(event) {
+      event.preventDefault();
+      element("key-result").textContent = "";
+      try {
+        const response = await fetch("/api/ssh-keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens().accessToken}` },
+          body: JSON.stringify({ publicKey: element("public-key").value }),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(body?.detail ?? `Spring answered ${response.status}.`);
+        }
+        element("public-key").value = "";
+        element("key-result").textContent = "Key registered.";
+      } catch (error) {
+        element("key-result").textContent = error.message;
+      }
+    }
+
+    async function copyCloneCommand() {
+      try {
+        await navigator.clipboard.writeText(element("clone-command").value);
+        element("copy").textContent = "Copied";
+      } catch {
+        showProblem("Could not copy. Please select the command and copy it yourself.");
+      }
+    }
+
+    function showTab(chat) {
+      element("assignments").hidden = chat;
+      element("chat").hidden = !chat;
+      element("assignments-tab").setAttribute("aria-pressed", String(!chat));
+      element("chat-tab").setAttribute("aria-pressed", String(chat));
+    }
+
+    function randomString() {
+      return base64Url(crypto.getRandomValues(new Uint8Array(32)));
+    }
+
+    async function challengeOf(codeVerifier) {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(codeVerifier));
+      return base64Url(new Uint8Array(digest));
+    }
+
+    function base64Url(bytes) {
+      return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
+
+    element("sign-in").addEventListener("click", () => startSignIn().catch((error) => showProblem(error.message)));
+    element("renew").addEventListener("click", renew);
+    element("sign-out").addEventListener("click", signOut);
+    element("key-form").addEventListener("submit", registerKey);
+    element("copy").addEventListener("click", copyCloneCommand);
+    element("assignments-tab").addEventListener("click", () => showTab(false));
+    element("chat-tab").addEventListener("click", () => showTab(true));
+
+    (async () => {
+      try {
+        await completeSignIn();
+      } catch (error) {
+        showProblem(error.message);
+      }
+      const current = tokens();
+      showSignedIn(Boolean(current));
+      if (current) {
+        scheduleRenewal(current);
+        frontEnd.src = `${FRONT_END_ORIGIN}/?embedded=1`;
+      }
+    })();
+  </script>
+</body>
+</html>

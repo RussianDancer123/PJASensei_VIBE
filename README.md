@@ -20,7 +20,7 @@ Everything is reached through <http://localhost:8080>:
 | -------------- | ------------------------------------------ |
 | `/`            | Static front end                           |
 | `/api`         | Spring; `/api/status` shows what it reaches |
-| `/plugin-mock` | IDE plugin mock (development only)         |
+| `/plugin-mock` | IDE plugin mock (development only), see [The plugin](#the-plugin) |
 | `/mock-idp/`   | Identity provider mock (development only); start at `/mock-idp/.well-known/openid-configuration` |
 | `/config.json` | Identity provider settings for the front end, written by Caddy |
 
@@ -100,6 +100,12 @@ Git then works as usual, on the published SSH port, with the key that was regist
 ```sh
 git clone ssh://git@localhost:2222/pjasensei-spring/assignment-1-s17001.git
 ```
+
+## The plugin
+
+The real IDE plugin is not part of this repository. [`docs/plugin-contract.md`](docs/plugin-contract.md) is what it has to implement, and `/plugin-mock` is a stand-in that keeps to that contract.
+
+To try the whole flow, open `/plugin-mock` and sign in with its button. The Assignments tab is the real front end in an iframe, which uses the plugin's token. Paste an SSH public key in the plugin mock's field. Then click **Get**, on an Assignment as a Student or on a recipient of an opened Assignment as an Instructor, and the plugin mock shows a `git clone` command to copy. The Get button on recipients exists only in the iframe. **Renew token** gets a new token the way the plugin mock otherwise does by itself a minute before the old one expires, and passes it on to the iframe. The Chat tab is a placeholder for now.
 
 ## Switch to real Cognito
 

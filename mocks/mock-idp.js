@@ -1,6 +1,6 @@
-// Development-only stand-in for Cognito: real OIDC discovery, signing keys, and authorization code
-// with PKCE on its own login page, and the Cognito API calls Refresh makes. Spring and the front end
-// know it only through its public contract.
+// Development-only stand-in for Cognito: real OIDC discovery, signing keys, authorization code with
+// PKCE on its own login page, refresh tokens, and the Cognito API calls Refresh makes. Spring and the
+// front end know it only through its public contract.
 const crypto = require("node:crypto");
 const users = require("./mock-idp-users.json");
 
@@ -20,6 +20,7 @@ const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLen
 const keyId = crypto.randomUUID();
 
 const pendingCodes = new Map();
+const refreshTokens = new Map();
 
 async function handleMockIdp(request, response, pathname) {
   const route = `${request.method} ${pathname.slice(BASE_PATH.length)}`;
@@ -51,7 +52,7 @@ function discoveryDocument() {
     token_endpoint: `${issuer}/oauth2/token`,
     jwks_uri: `${issuer}/.well-known/jwks.json`,
     response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
     subject_types_supported: ["public"],
     id_token_signing_alg_values_supported: ["RS256"],
     scopes_supported: ["openid"],
@@ -121,13 +122,20 @@ async function logIn(request, response) {
 
 async function exchangeCode(request, response) {
   const form = await readForm(request);
-  if (form.get("grant_type") !== "authorization_code") {
-    return sendJson(response, 400, { error: "unsupported_grant_type" });
-  }
   if (form.get("client_id") !== clientId) {
     return sendJson(response, 400, { error: "invalid_client" });
   }
+  switch (form.get("grant_type")) {
+    case "authorization_code":
+      return grantByCode(response, form);
+    case "refresh_token":
+      return grantByRefreshToken(response, form);
+    default:
+      return sendJson(response, 400, { error: "unsupported_grant_type" });
+  }
+}
 
+function grantByCode(response, form) {
   // A code works once, even when this attempt fails.
   const pending = pendingCodes.get(form.get("code"));
   pendingCodes.delete(form.get("code"));
@@ -140,12 +148,27 @@ async function exchangeCode(request, response) {
     return sendJson(response, 400, { error: "invalid_grant" });
   }
 
-  sendJson(response, 200, {
-    access_token: accessToken(pending.user),
-    id_token: idToken(pending.user, pending.nonce),
+  const refreshToken = crypto.randomUUID();
+  refreshTokens.set(refreshToken, pending.user);
+  sendJson(response, 200, { ...tokensOf(pending.user, pending.nonce), refresh_token: refreshToken });
+}
+
+// As in Cognito, the refresh token stays the same and is not sent again.
+function grantByRefreshToken(response, form) {
+  const user = refreshTokens.get(form.get("refresh_token"));
+  if (!user) {
+    return sendJson(response, 400, { error: "invalid_grant" });
+  }
+  sendJson(response, 200, tokensOf(user));
+}
+
+function tokensOf(user, nonce) {
+  return {
+    access_token: accessToken(user),
+    id_token: idToken(user, nonce),
     token_type: "Bearer",
     expires_in: TOKEN_LIFETIME_SECONDS,
-  });
+  };
 }
 
 function challengeOf(verifier) {

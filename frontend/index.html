@@ -6,6 +6,14 @@
   <title>PJASensei</title>
   <script defer src="/app.js"></script>
   <script defer src="/vendor/alpine-3.17.5.min.js"></script>
+  <style>
+    /* Keeps the page usable in the narrow window of an IDE plugin. */
+    textarea, input { box-sizing: border-box; max-width: 100%; }
+    pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
+    @media (max-width: 480px) {
+      body { margin: 0.5rem; }
+    }
+  </style>
 </head>
 <body>
   <h1>PJASensei</h1>
@@ -16,7 +24,7 @@
       <div>
         <p>Signed in as <strong x-text="me.username"></strong></p>
         <p>Roles: <strong x-text="me.roles.join(', ') || 'none'"></strong></p>
-        <button @click="signOut">Sign out</button>
+        <button x-show="!embedded" @click="signOut">Sign out</button>
 
         <section x-show="isStudent">
           <h2>My Assignments</h2>
@@ -135,6 +143,8 @@
                     <strong x-text="recipient.studentNumber"></strong>:
                     <code x-show="recipient.sshUrl" x-text="recipient.sshUrl"></code>
                     <span x-show="!recipient.sshUrl">no repository</span>
+                    <button x-show="embedded && recipient.sshUrl"
+                            @click="sendCloneToPlugin(recipient.sshUrl, openedAssignment.id)">Get</button>
                   </li>
                 </template>
               </ul>
@@ -144,7 +154,8 @@
         </section>
       </div>
     </template>
-    <button x-show="!me && !loading" @click="signIn">Sign in</button>
+    <button x-show="!embedded && !me && !loading" @click="signIn">Sign in</button>
+    <p x-show="embedded && !me && !loading" role="status">Waiting for the plugin to sign in.</p>
   </div>
 
   <div x-data="{ status: 'checking' }"

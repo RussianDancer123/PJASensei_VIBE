@@ -4,8 +4,15 @@ const TOKEN_KEY = "pjasensei.accessToken";
 const PENDING_SIGN_IN_KEY = "pjasensei.pendingSignIn";
 const REDIRECT_URI = `${location.origin}/`;
 
+// Embedded in an IDE plugin (docs/plugin-contract.md), the plugin signs in and hands over its token.
+// It stays in memory, because a parent on this origin shares sessionStorage with this page.
+const EMBEDDED = new URLSearchParams(location.search).has("embedded");
+let pluginToken = null;
+let pluginOrigins = [];
+
 document.addEventListener("alpine:init", () => {
   Alpine.data("session", () => ({
+    embedded: EMBEDDED,
     me: null,
     error: null,
     loading: true,
@@ -90,11 +97,19 @@ document.addEventListener("alpine:init", () => {
           throw new Error(await reasonFrom(response));
         }
         const { sshUrl } = await response.json();
+        if (EMBEDDED) {
+          this.sendCloneToPlugin(sshUrl, this.preview.id);
+          return;
+        }
         this.cloneCommand = `git clone ${sshUrl}`;
         this.copied = false;
       } catch (error) {
         this.workError = error.message;
       }
+    },
+
+    sendCloneToPlugin(sshUrl, assignmentId) {
+      sendToPlugin({ type: "clone", sshUrl, assignmentId });
     },
 
     async copyCloneCommand() {
@@ -188,19 +203,55 @@ document.addEventListener("alpine:init", () => {
 
     async init() {
       try {
-        await completeSignIn();
-        this.me = await fetchMe();
-        if (this.isInstructor) {
-          this.classGroups = await fetchClassGroups();
-          await this.reloadSentAssignments();
-        }
-        if (this.isStudent) {
-          this.assignments = await fetchStudentAssignments();
+        if (EMBEDDED) {
+          await this.connectToPlugin();
+        } else {
+          await completeSignIn();
+          await this.loadAccount();
         }
       } catch (error) {
         this.error = error.message;
       } finally {
         this.loading = false;
+      }
+    },
+
+    async loadAccount() {
+      this.me = await fetchMe();
+      if (this.isInstructor) {
+        this.classGroups = await fetchClassGroups();
+        await this.reloadSentAssignments();
+      }
+      if (this.isStudent) {
+        this.assignments = await fetchStudentAssignments();
+      }
+    },
+
+    // The listener is in place before "ready" goes out, so the answer cannot be missed.
+    async connectToPlugin() {
+      pluginOrigins = originsOf((await getJson("/config.json")).frameAncestors);
+      window.addEventListener("message", (event) => {
+        if (event.source !== window.parent || !pluginOrigins.includes(event.origin)) {
+          return;
+        }
+        if (event.data?.type === "token" && typeof event.data.accessToken === "string") {
+          this.receiveToken(event.data.accessToken);
+        }
+      });
+      sendToPlugin({ type: "ready" });
+    },
+
+    // A renewed token only replaces the old one, leaving whatever is open on the page alone.
+    async receiveToken(token) {
+      pluginToken = token;
+      if (this.me) {
+        return;
+      }
+      this.error = null;
+      try {
+        await this.loadAccount();
+      } catch (error) {
+        this.error = error.message;
       }
     },
 
@@ -317,14 +368,35 @@ async function completeSignIn() {
   sessionStorage.setItem(TOKEN_KEY, (await response.json()).access_token);
 }
 
+function currentToken() {
+  return EMBEDDED ? pluginToken : sessionStorage.getItem(TOKEN_KEY);
+}
+
+// Who may embed this page is also who may talk to it. A CSP source that is not one exact origin,
+// such as a wildcard, cannot be compared with the origin of a message, so it counts for nothing here.
+function originsOf(frameAncestors) {
+  return frameAncestors.split(/\s+/).flatMap((source) => {
+    if (source === "'self'") {
+      return [location.origin];
+    }
+    return URL.canParse(source) && !source.includes("*") ? [new URL(source).origin] : [];
+  });
+}
+
+// Goes only to a parent on an allowed origin: the browser drops it for any other.
+function sendToPlugin(message) {
+  pluginOrigins.forEach((origin) => window.parent.postMessage(message, origin));
+}
+
 async function fetchMe() {
-  const token = sessionStorage.getItem(TOKEN_KEY);
+  const token = currentToken();
   if (!token) {
     return null;
   }
   const response = await fetch("/api/me", { headers: { Authorization: `Bearer ${token}` } });
   if (response.status === 401) {
-    // Expired or no longer accepted: back to the sign-in button.
+    // Expired or no longer accepted: back to the sign-in button, or to waiting for the plugin.
+    pluginToken = null;
     sessionStorage.removeItem(TOKEN_KEY);
     return null;
   }
@@ -371,8 +443,7 @@ async function fetchStudentAssignments() {
 }
 
 function callApi(path, options = {}) {
-  const token = sessionStorage.getItem(TOKEN_KEY);
-  return fetch(path, { ...options, headers: { ...options.headers, Authorization: `Bearer ${token}` } });
+  return fetch(path, { ...options, headers: { ...options.headers, Authorization: `Bearer ${currentToken()}` } });
 }
 
 // Spring explains what it refuses in `detail`, though Spring Security's own refusals have no body.
