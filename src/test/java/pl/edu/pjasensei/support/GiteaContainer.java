@@ -21,6 +21,7 @@ import org.testcontainers.utility.DockerImageName;
 final class GiteaContainer extends GenericContainer<GiteaContainer> {
 
     static final int HTTP_PORT = 3000;
+    static final int SSH_PORT = 22;
     static final String NETWORK_ALIAS = "gitea";
 
     private static final Path CONFIG_FILE = Path.of("docker/gitea/gitea.env");
@@ -34,7 +35,7 @@ final class GiteaContainer extends GenericContainer<GiteaContainer> {
         super(DockerImageName.parse(image));
         withNetwork(network);
         withNetworkAliases(NETWORK_ALIAS);
-        withExposedPorts(HTTP_PORT);
+        withExposedPorts(HTTP_PORT, SSH_PORT);
         waitingFor(Wait.forHttp("/api/healthz").forPort(HTTP_PORT));
         withCopyToContainer(Transferable.of(read(PROVISIONING_SCRIPT)), SCRIPT_IN_CONTAINER);
         sharedConfig().forEach((name, value) -> withEnv((String) name, (String) value));
@@ -46,6 +47,10 @@ final class GiteaContainer extends GenericContainer<GiteaContainer> {
 
     String apiUrl() {
         return "http://%s:%d".formatted(getHost(), getMappedPort(HTTP_PORT));
+    }
+
+    int sshPort() {
+        return getMappedPort(SSH_PORT);
     }
 
     String apiToken() {

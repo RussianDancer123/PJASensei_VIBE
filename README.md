@@ -70,6 +70,26 @@ The second request is safe to repeat: it handles only recipients without a Stude
 
 Spring's own Gitea account owns every snapshot and StudentRepository. A repository is named like `assignment-17-s12345`, is private, and has two collaborators: the Student with write access and the sending Instructor with read access.
 
+## Student work
+
+Anyone in the database can add SSH public keys, on the front end or with `POST /api/ssh-keys` and `{ "publicKey" }`. A person may have several. A key goes on their own technical Gitea account, which is made if missing. Adding the same key again changes nothing, so a plugin can do it at every start. A key must be one line, as in a `.pub` file. Anything else, or an invalid key, is refused with a 400, and a key already registered to someone else with a 409.
+
+A Student's own routes need the Student role, and an Assignment without a StudentRepository of theirs answers with a 404:
+
+| Route                                         | Answer                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------- |
+| `GET /api/student/assignments`                | `{ "assignments": [{ "id", "title" }] }`, the newest first                      |
+| `GET /api/student/assignments/{id}`           | `{ "id", "title", "readme" }`, the README as raw text, read from Gitea through Spring |
+| `GET /api/student/assignments/{id}/ssh-address` | `{ "sshUrl" }`, which the **Get** button shows as a `git clone` command to copy |
+
+`readme` is the file at the top of the repository named `README` in any case, with no extension or with a text one (`md`, `markdown`, `txt`, `rst`, `adoc`, `org`), preferring `README.md`. It is `null` when there is none, and also when it is over 1 MiB, because a Student can push anything.
+
+Git then works as usual, on the published SSH port, with the key that was registered:
+
+```sh
+git clone ssh://git@localhost:2222/pjasensei-spring/assignment-1-s17001.git
+```
+
 ## Switch to real Cognito
 
 Spring has no code specific to the mock, so this takes environment variables alone. In your `.env`:
@@ -95,4 +115,6 @@ Tests need Docker too: they start Spring against real Postgres and real Gitea wi
 ./gradlew test
 ```
 
-Annotate a test class with `@IntegrationTest` and inject a `RestTestClient` to exercise the HTTP API, a `TestIdentityProvider` to sign tokens for it, a `TestCognito` to set what the Cognito API answers, a `TestGitea` to look at Gitea from outside Spring, and a `TestGiteaBoundary` to make Gitea fail for Spring's requests, which all pass through it. The test Gitea uses the same `docker/gitea` config and provisioning script as the stack. It imports only from `source.test`, an HTTPS proxy in front of itself, so a test can create a SourceRepository with `TestGitea` and change it later. To use it, a test sets `pjasensei.assignments.allowed-source-hosts=source.test`.
+They also need `git` and OpenSSH (`ssh`, `ssh-keygen`) on the `PATH`: `GitOverSshTest` clones and pushes for real.
+
+Annotate a test class with `@IntegrationTest` and inject a `RestTestClient` to exercise the HTTP API, a `TestIdentityProvider` to sign tokens for it, a `TestCognito` to set what the Cognito API answers, a `TestGitea` to look at Gitea from outside Spring, and a `TestGiteaBoundary` to make Gitea fail for Spring's requests, which all pass through it. `TestGitea.newGitUser` gives someone a key pair and real git, and `Classroom` gets people and Assignments ready through the API. The test Gitea uses the same `docker/gitea` config and provisioning script as the stack. It imports only from `source.test`, an HTTPS proxy in front of itself, so a test can create a SourceRepository with `TestGitea` and change it later. To use it, a test sets `pjasensei.assignments.allowed-source-hosts=source.test`.

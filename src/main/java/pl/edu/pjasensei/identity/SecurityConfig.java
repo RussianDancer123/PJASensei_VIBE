@@ -48,15 +48,16 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/me").authenticated()
                         // Adds the caller to the database, so it can ask only for the token and role.
                         .requestMatchers(HttpMethod.POST, "/api/refresh").hasRole(Role.INSTRUCTOR.name())
-                        .requestMatchers(HttpMethod.GET, "/api/class-groups").access(knownInstructor(knownUser))
-                        .requestMatchers(HttpMethod.POST, "/api/assignments/**").access(knownInstructor(knownUser))
+                        .requestMatchers(HttpMethod.GET, "/api/class-groups").access(known(Role.INSTRUCTOR, knownUser))
+                        .requestMatchers(HttpMethod.POST, "/api/assignments/**").access(known(Role.INSTRUCTOR, knownUser))
+                        .requestMatchers(HttpMethod.GET, "/api/student/**").access(known(Role.STUDENT, knownUser))
                         .anyRequest().access(knownUser))
                 .oauth2ResourceServer(server -> server.jwt(Customizer.withDefaults()))
                 .build();
     }
 
-    private static AuthorizationManager<RequestAuthorizationContext> knownInstructor(KnownUserRule knownUser) {
-        return AuthorizationManagers.allOf(AuthorityAuthorizationManager.hasRole(Role.INSTRUCTOR.name()), knownUser);
+    private static AuthorizationManager<RequestAuthorizationContext> known(Role role, KnownUserRule knownUser) {
+        return AuthorizationManagers.allOf(AuthorityAuthorizationManager.hasRole(role.name()), knownUser);
     }
 
     @Bean
