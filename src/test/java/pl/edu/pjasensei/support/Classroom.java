@@ -78,6 +78,11 @@ public final class Classroom {
         return identityProvider.token(claims -> claims.subject(sub).claim("cognito:groups", List.of(group)));
     }
 
+    /** The name of a StudentRepository in Gitea. A test Student's username is their Student Number. */
+    public static String studentRepositoryName(int assignment, Person student) {
+        return "assignment-%d-%s".formatted(assignment, student.username());
+    }
+
     public record Person(String sub, String username, String token) {}
 
     public record TaughtClassGroup(Person instructor, List<Person> students) {}

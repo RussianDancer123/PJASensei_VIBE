@@ -65,7 +65,7 @@ class GitOverSshTest {
 
         var pushed = computer.pushNewFile("work", "solution.txt");
         assertThat(pushed.succeeded()).as(pushed.toString()).isTrue();
-        assertThat(gitea.fileExists("assignment-%d-%s".formatted(id, student.username()), "solution.txt"))
+        assertThat(gitea.fileExists(Classroom.studentRepositoryName(id, student), "solution.txt"))
                 .isTrue();
     }
 
@@ -105,7 +105,7 @@ class GitOverSshTest {
         var pushed = othersComputer.pushTo("their-own", ownersAddress);
         assertThat(pushed.succeeded()).as(pushed.toString()).isFalse();
         assertThat(pushed.output()).contains("is not authorized to write");
-        var ownersRepository = "assignment-%d-%s".formatted(ownersOnly, owner.username());
+        var ownersRepository = Classroom.studentRepositoryName(ownersOnly, owner);
         assertThat(gitea.fileExists(ownersRepository, "written-by-the-other-student.txt")).isFalse();
     }
 

@@ -115,6 +115,22 @@ class StudentWorkApiTest {
     }
 
     @Test
+    void aFileOnlyNamedLikeAReadmeIsNotOne() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        var source = gitea.newSourceRepository();
+        gitea.deleteFile(source, "README.md");
+        gitea.addFile(source, "README.png", "a picture");
+        gitea.addFile(source, "README.txt", "The text");
+
+        int id = classroom.send(taught.instructor(), "Sorting", source.url(), List.of(student));
+
+        get(student.token(), "/api/student/assignments/" + id)
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.readme").isEqualTo("The text");
+    }
+
+    @Test
     void aMissingReadmeDoesNotBreakThePreview() {
         var taught = classroom.newTaughtClassGroup(1);
         var student = taught.students().getFirst();
@@ -154,7 +170,7 @@ class StudentWorkApiTest {
         int id = classroom.send(
                 taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(student));
 
-        var address = gitea.repository("assignment-%d-%s".formatted(id, student.username()))
+        var address = gitea.repository(Classroom.studentRepositoryName(id, student))
                 .path("ssh_url")
                 .asString();
         assertThat(address).isNotBlank();

@@ -49,13 +49,13 @@ class SshKeysApiTest {
     @Test
     void aStudentCanRegisterSeveralKeys() {
         var student = classroom.newTaughtClassGroup(1).students().getFirst();
-        var firstComputer = newPublicKey();
-        var secondComputer = newPublicKey();
+        var keyOfFirstComputer = newPublicKey();
+        var keyOfSecondComputer = newPublicKey();
 
-        register(student.token(), firstComputer).expectStatus().isNoContent();
-        register(student.token(), secondComputer).expectStatus().isNoContent();
+        register(student.token(), keyOfFirstComputer).expectStatus().isNoContent();
+        register(student.token(), keyOfSecondComputer).expectStatus().isNoContent();
 
-        assertThat(gitea.publicKeys(student.sub())).containsExactlyInAnyOrder(firstComputer, secondComputer);
+        assertThat(gitea.publicKeys(student.sub())).containsExactlyInAnyOrder(keyOfFirstComputer, keyOfSecondComputer);
     }
 
     @Test
@@ -115,6 +115,22 @@ class SshKeysApiTest {
                 .body(Map.of())
                 .exchange()
                 .expectStatus().isBadRequest();
+
+        assertThat(gitea.publicKeys(student.sub())).isEmpty();
+    }
+
+    @Test
+    void acceptsAKeyOnlyInTheFormOfAPubFile() {
+        var student = classroom.newTaughtClassGroup(1).students().getFirst();
+        var parts = newPublicKey().split(" ");
+        var wrapped = parts[0] + " " + parts[1].substring(0, 20) + "\n" + parts[1].substring(20);
+        var ssh2 = "---- BEGIN SSH2 PUBLIC KEY ----\n" + parts[1] + "\n---- END SSH2 PUBLIC KEY ----";
+
+        for (var key : List.of(parts[1], wrapped, ssh2)) {
+            register(student.token(), key)
+                    .expectStatus().isBadRequest()
+                    .expectBody().jsonPath("$.detail").isNotEmpty();
+        }
 
         assertThat(gitea.publicKeys(student.sub())).isEmpty();
     }

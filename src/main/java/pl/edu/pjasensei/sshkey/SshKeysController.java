@@ -21,6 +21,7 @@ import pl.edu.pjasensei.gitea.GiteaClient;
 class SshKeysController {
 
     private static final Logger log = LoggerFactory.getLogger(SshKeysController.class);
+    private static final String INVALID_KEY = "That is not a valid SSH public key. Paste the contents of a .pub file.";
 
     private final GiteaClient gitea;
 
@@ -53,8 +54,6 @@ class SshKeysController {
         log.warn("Could not register an SSH key", e);
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, "Could not register the key.");
     }
-
-    private static final String INVALID_KEY = "That is not a valid SSH public key. Paste the contents of a .pub file.";
 
     private static final class KeyRefused extends RuntimeException {
 

@@ -70,7 +70,7 @@ Spring's own Gitea account owns every snapshot and StudentRepository. A reposito
 
 ## Student work
 
-Anyone in the database can add SSH public keys, on the front end or with `POST /api/ssh-keys` and `{ "publicKey" }`. A person may have several. A key goes on their own technical Gitea account, which is made if missing. Adding the same key again changes nothing, so a plugin can do it at every start. An invalid key is refused with a 400 and a key already registered to someone else with a 409.
+Anyone in the database can add SSH public keys, on the front end or with `POST /api/ssh-keys` and `{ "publicKey" }`. A person may have several. A key goes on their own technical Gitea account, which is made if missing. Adding the same key again changes nothing, so a plugin can do it at every start. A key must be one line, as in a `.pub` file. Anything else, or an invalid key, is refused with a 400, and a key already registered to someone else with a 409.
 
 A Student's own routes need the Student role, and an Assignment without a StudentRepository of theirs answers with a 404:
 
@@ -80,7 +80,7 @@ A Student's own routes need the Student role, and an Assignment without a Studen
 | `GET /api/student/assignments/{id}`           | `{ "id", "title", "readme" }`, the README as raw text, read from Gitea through Spring |
 | `GET /api/student/assignments/{id}/ssh-address` | `{ "sshUrl" }`, which the **Get** button shows as a `git clone` command to copy |
 
-`readme` is the file at the top of the repository named `README` with or without an extension, in any case, preferring `README.md`. It is `null` when there is none, and also when it is over 1 MiB, because a Student can push anything.
+`readme` is the file at the top of the repository named `README` in any case, with no extension or with a text one (`md`, `markdown`, `txt`, `rst`, `adoc`, `org`), preferring `README.md`. It is `null` when there is none, and also when it is over 1 MiB, because a Student can push anything.
 
 Git then works as usual, on the published SSH port, with the key that was registered:
 

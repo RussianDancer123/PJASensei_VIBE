@@ -31,7 +31,9 @@ public class GiteaClient {
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String TEMPLATE_INSTRUCTIONS = ".gitea/template";
-    private static final Pattern README_NAME = Pattern.compile("readme(\\.[^.]+)?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PUB_FILE_LINE = Pattern.compile("\\S+[ \\t]+[A-Za-z0-9+/]+={0,2}([ \\t].*)?");
+    private static final Pattern README_NAME =
+            Pattern.compile("readme(\\.(md|markdown|txt|rst|adoc|org))?", Pattern.CASE_INSENSITIVE);
     private static final String PREFERRED_README = "README.md";
     private static final long MAX_README_BYTES = 1024 * 1024;
 
@@ -97,11 +99,16 @@ public class GiteaClient {
      * @throws RestClientException when Gitea cannot answer
      */
     public KeyResult addPublicKey(String account, String publicKey) {
+        // Gitea also takes other forms, but a repeat could then not be recognised by its fingerprint.
+        var key = publicKey.strip();
+        if (!PUB_FILE_LINE.matcher(key).matches()) {
+            return KeyResult.INVALID;
+        }
         try {
             http.post()
                     .uri("/api/v1/admin/users/{account}/keys", account)
                     // Gitea needs a title unique to the account, which nobody ever sees.
-                    .body(Map.of("title", "key-" + UUID.randomUUID(), "key", publicKey))
+                    .body(Map.of("title", "key-" + UUID.randomUUID(), "key", key))
                     .retrieve()
                     .toBodilessEntity();
             return KeyResult.ADDED;
@@ -110,7 +117,7 @@ public class GiteaClient {
             if (!e.getResponseBodyAsString().contains("has been used")) {
                 return KeyResult.INVALID;
             }
-            return accountHasKey(account, publicKey) ? KeyResult.ADDED : KeyResult.USED_BY_ANOTHER_ACCOUNT;
+            return accountHasKey(account, key) ? KeyResult.ADDED : KeyResult.USED_BY_ANOTHER_ACCOUNT;
         }
     }
 
@@ -124,9 +131,9 @@ public class GiteaClient {
 
     /** Of a key Gitea has already found valid, in the form its lookup by fingerprint expects. */
     private static String fingerprintOf(String publicKey) {
-        var key = Base64.getDecoder().decode(publicKey.strip().split("\\s+")[1]);
+        var keyBytes = Base64.getDecoder().decode(publicKey.split("[ \\t]+")[1]);
         try {
-            var digest = MessageDigest.getInstance("SHA-256").digest(key);
+            var digest = MessageDigest.getInstance("SHA-256").digest(keyBytes);
             return "SHA256:" + Base64.getEncoder().withoutPadding().encodeToString(digest);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);

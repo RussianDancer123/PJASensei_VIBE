@@ -37,17 +37,18 @@ class StudentWorkController {
 
     @GetMapping("/api/student/assignments/{id}")
     Preview preview(@PathVariable long id, JwtAuthenticationToken authentication) {
-        var work = workOf(id, authentication);
-        return new Preview(id, work.title(), gitea.readme(work.repositoryName()).orElse(null));
+        var repository = studentRepositoryOf(id, authentication);
+        return new Preview(id, repository.assignmentTitle(), gitea.readme(repository.repositoryName()).orElse(null));
     }
 
     @GetMapping("/api/student/assignments/{id}/ssh-address")
     SshAddress sshAddress(@PathVariable long id, JwtAuthenticationToken authentication) {
-        return new SshAddress(workOf(id, authentication).sshUrl());
+        return new SshAddress(studentRepositoryOf(id, authentication).sshUrl());
     }
 
-    private AssignmentStore.Work workOf(long assignment, JwtAuthenticationToken authentication) {
-        return store.workOf(assignment, authentication.getName())
+    private AssignmentStore.StudentRepository studentRepositoryOf(
+            long assignment, JwtAuthenticationToken authentication) {
+        return store.studentRepositoryOf(assignment, authentication.getName())
                 .orElseThrow(() -> new AssignmentRefused(HttpStatus.NOT_FOUND, "You have no such Assignment."));
     }
 
@@ -62,7 +63,7 @@ class StudentWorkController {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, "Could not read the README.");
     }
 
-    record Assignments(List<AssignmentStore.StudentAssignment> assignments) {}
+    record Assignments(List<AssignmentStore.AssignmentSummary> assignments) {}
 
     record Preview(long id, String title, String readme) {}
 

@@ -78,7 +78,7 @@ class AssignmentStore {
     }
 
     /** The newest first. A recipient whose StudentRepository was never made has nothing to start. */
-    List<StudentAssignment> assignmentsWithRepositoryOf(String studentSub) {
+    List<AssignmentSummary> assignmentsWithRepositoryOf(String studentSub) {
         return jdbc.sql("""
                         SELECT a.id, a.title
                         FROM student_repositories sr JOIN assignments a ON a.id = sr.assignment_id
@@ -86,24 +86,24 @@ class AssignmentStore {
                         ORDER BY a.id DESC
                         """)
                 .param(studentSub)
-                .query(StudentAssignment.class)
+                .query(AssignmentSummary.class)
                 .list();
     }
 
-    Optional<Work> workOf(long assignment, String studentSub) {
+    Optional<StudentRepository> studentRepositoryOf(long assignment, String studentSub) {
         return jdbc.sql("""
-                        SELECT a.title, sr.repository_name, sr.ssh_url
+                        SELECT a.title AS assignment_title, sr.repository_name, sr.ssh_url
                         FROM student_repositories sr JOIN assignments a ON a.id = sr.assignment_id
                         WHERE sr.assignment_id = ? AND sr.student_sub = ?
                         """)
                 .params(assignment, studentSub)
-                .query(Work.class)
+                .query(StudentRepository.class)
                 .optional();
     }
 
     record Recipient(String sub, String studentNumber) {}
 
-    record StudentAssignment(long id, String title) {}
+    record AssignmentSummary(long id, String title) {}
 
-    record Work(String title, String repositoryName, String sshUrl) {}
+    record StudentRepository(String assignmentTitle, String repositoryName, String sshUrl) {}
 }

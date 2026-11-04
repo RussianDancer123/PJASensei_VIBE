@@ -2,7 +2,7 @@ package pl.edu.pjasensei.assignment;
 
 import org.springframework.http.HttpStatus;
 
-/** A request that cannot go ahead, with a reason the Instructor can read. */
+/** A request that cannot go ahead, with a reason the person asking can read. */
 class AssignmentRefused extends RuntimeException {
 
     private final HttpStatus status;
