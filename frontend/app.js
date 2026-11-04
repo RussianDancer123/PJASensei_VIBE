@@ -19,7 +19,7 @@ document.addEventListener("alpine:init", () => {
     sendStep: null,
     sentMessage: null,
     sendError: null,
-    studentsWithoutRepository: [],
+    studentNumbersWithoutRepository: [],
 
     get isInstructor() {
       return this.me?.roles.includes("INSTRUCTOR");
@@ -45,7 +45,7 @@ document.addEventListener("alpine:init", () => {
     async send() {
       this.sendError = null;
       this.sentMessage = null;
-      this.studentsWithoutRepository = [];
+      this.studentNumbersWithoutRepository = [];
       this.sendStep = "copying";
       try {
         const created = await callApi("/api/assignments", {
@@ -60,8 +60,8 @@ document.addEventListener("alpine:init", () => {
 
         // The Assignment exists now, so sending the form again would make a second one.
         const title = this.title;
-        const recipients = this.selected.length;
-        const sent = `"${title}" to ${recipients} Student(s)`;
+        const recipientCount = this.selected.length;
+        const sent = `"${title}" to ${recipientCount} Student(s)`;
         this.title = "";
         this.sourceUrl = "";
         this.selected = [];
@@ -73,8 +73,8 @@ document.addEventListener("alpine:init", () => {
         }
 
         const { failures } = await repositories.json();
-        this.studentsWithoutRepository = failures.map((failure) => failure.studentNumber);
-        this.sentMessage = `Sent "${title}" to ${recipients - failures.length} of ${recipients} Student(s).`;
+        this.studentNumbersWithoutRepository = failures.map((failure) => failure.studentNumber);
+        this.sentMessage = `Sent "${title}" to ${recipientCount - failures.length} of ${recipientCount} Student(s).`;
       } catch (error) {
         this.sendError = error.message;
       } finally {
@@ -118,7 +118,7 @@ document.addEventListener("alpine:init", () => {
       this.selected = [];
       this.sentMessage = null;
       this.sendError = null;
-      this.studentsWithoutRepository = [];
+      this.studentNumbersWithoutRepository = [];
     },
 
     async refresh() {

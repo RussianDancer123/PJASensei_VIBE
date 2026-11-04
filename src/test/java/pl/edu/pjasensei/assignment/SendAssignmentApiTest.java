@@ -3,6 +3,7 @@ package pl.edu.pjasensei.assignment;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jayway.jsonpath.JsonPath;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -356,6 +357,24 @@ class SendAssignmentApiTest {
     }
 
     @Test
+    void anAnswerSpringCannotUseCostsOnlyThatStudentTheirRepository() {
+        var taught = newTaughtClassGroup(2);
+        var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
+        var failing = taught.students().stream()
+                .min(Comparator.comparing(Member::username))
+                .orElseThrow();
+        giteaBoundary.answerEmptyToNext(3, generating(repositoryName(id, failing)));
+
+        repositoriesWith(taught.instructor().token(), id)
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.failures.length()").isEqualTo(1)
+                .jsonPath("$.failures[0].sub").isEqualTo(failing.sub());
+
+        assertThat(sshAddressesOf(id)).hasSize(1);
+    }
+
+    @Test
     void aTimeoutOnAnAttemptThatActuallyWorkedCountsAsSuccess() {
         var taught = newTaughtClassGroup(1);
         var student = taught.students().getFirst();
@@ -492,13 +511,8 @@ class SendAssignmentApiTest {
         var snapshots = gitea.snapshotCount();
         giteaBoundary.failNext(1, MAKING_A_TEMPLATE);
 
-        var detail = JsonPath.<String>read(
-                createWith(taught.instructor().token(), request(url, taught.studentSubs()))
-                        .expectStatus().isEqualTo(502)
-                        .expectBody(String.class).returnResult().getResponseBody(),
-                "$.detail");
-
-        assertThat(detail).doesNotContain("URL");
+        assertThat(reasonForBadGateway(taught.instructor(), request(url, taught.studentSubs())))
+                .doesNotContain("URL");
         assertThat(assignmentsFrom(url)).isZero();
         assertThat(gitea.snapshotCount()).isEqualTo(snapshots);
     }
@@ -510,13 +524,8 @@ class SendAssignmentApiTest {
         giteaBoundary.failNext(1, MAKING_A_TEMPLATE);
         giteaBoundary.failNext(1, "DELETE /api/v1/repos/.*/snapshot-");
 
-        var detail = JsonPath.<String>read(
-                createWith(taught.instructor().token(), request(url, taught.studentSubs()))
-                        .expectStatus().isEqualTo(502)
-                        .expectBody(String.class).returnResult().getResponseBody(),
-                "$.detail");
-
-        assertThat(detail).doesNotContain("URL");
+        assertThat(reasonForBadGateway(taught.instructor(), request(url, taught.studentSubs())))
+                .doesNotContain("URL");
         assertThat(assignmentsFrom(url)).isZero();
     }
 
@@ -548,6 +557,14 @@ class SendAssignmentApiTest {
 
         assertThat(assignmentsFrom(url)).isZero();
         assertThat(gitea.snapshotCount()).isEqualTo(snapshots);
+    }
+
+    private String reasonForBadGateway(Instructor instructor, Map<String, Object> request) {
+        return JsonPath.read(
+                createWith(instructor.token(), request)
+                        .expectStatus().isEqualTo(502)
+                        .expectBody(String.class).returnResult().getResponseBody(),
+                "$.detail");
     }
 
     private static String grantingAccessTo(String repositoryName, Member student) {

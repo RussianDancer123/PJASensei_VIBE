@@ -51,22 +51,27 @@ public final class TestGiteaBoundary {
         return url;
     }
 
-    /** The next matching requests get a 500, and Gitea never sees them. */
-    public void failNext(int times, String request) {
-        faults.add(new Fault(Pattern.compile(request), new AtomicInteger(times), false));
+    /** The next requests matching this regex get a 500, and Gitea never sees them. */
+    public void failNext(int times, String requestRegex) {
+        faults.add(new Fault(Pattern.compile(requestRegex), new AtomicInteger(times), FaultKind.FAIL));
+    }
+
+    /** The next requests matching this regex get a success with no body, and Gitea never sees them. */
+    public void answerEmptyToNext(int times, String requestRegex) {
+        faults.add(new Fault(Pattern.compile(requestRegex), new AtomicInteger(times), FaultKind.EMPTY_ANSWER));
     }
 
     /**
-     * The next matching requests reach Gitea and do their work, but Spring gets no answer, like a
-     * timeout on an attempt that actually succeeded.
+     * The next requests matching this regex reach Gitea and do their work, but Spring gets no answer,
+     * like a timeout on an attempt that actually succeeded.
      */
-    public void loseAnswerToNext(int times, String request) {
-        faults.add(new Fault(Pattern.compile(request), new AtomicInteger(times), true));
+    public void loseAnswerToNext(int times, String requestRegex) {
+        faults.add(new Fault(Pattern.compile(requestRegex), new AtomicInteger(times), FaultKind.LOSE_ANSWER));
     }
 
-    /** How many matching requests Spring has made since the last {@link #reset()}. */
-    public long requestsMatching(String request) {
-        var pattern = Pattern.compile(request);
+    /** How many requests matching this regex Spring has made since the last {@link #reset()}. */
+    public long requestsMatching(String requestRegex) {
+        var pattern = Pattern.compile(requestRegex);
         return requests.stream().filter(seen -> pattern.matcher(seen).find()).count();
     }
 
@@ -84,13 +89,21 @@ public final class TestGiteaBoundary {
                     exchange.getRequestMethod(), target, new String(body, StandardCharsets.UTF_8));
             requests.add(request);
 
-            var fault = faults.stream().filter(candidate -> candidate.appliesTo(request)).findFirst();
-            if (fault.isPresent() && !fault.get().worksFirst()) {
+            var fault = faults.stream()
+                    .filter(candidate -> candidate.appliesTo(request))
+                    .map(Fault::kind)
+                    .findFirst()
+                    .orElse(null);
+            if (fault == FaultKind.FAIL) {
                 exchange.sendResponseHeaders(500, -1);
                 return;
             }
+            if (fault == FaultKind.EMPTY_ANSWER) {
+                exchange.sendResponseHeaders(201, -1);
+                return;
+            }
             var answer = passOn(exchange, target, body);
-            if (fault.isPresent()) {
+            if (fault == FaultKind.LOSE_ANSWER) {
                 return; // Closing without an answer: Spring sees the connection end.
             }
             answer.headers().firstValue("Content-Type")
@@ -119,7 +132,13 @@ public final class TestGiteaBoundary {
         }
     }
 
-    private record Fault(Pattern request, AtomicInteger timesLeft, boolean worksFirst) {
+    private enum FaultKind {
+        FAIL,
+        EMPTY_ANSWER,
+        LOSE_ANSWER
+    }
+
+    private record Fault(Pattern request, AtomicInteger timesLeft, FaultKind kind) {
 
         boolean appliesTo(String seen) {
             return request.matcher(seen).find() && timesLeft.getAndUpdate(left -> Math.max(0, left - 1)) > 0;

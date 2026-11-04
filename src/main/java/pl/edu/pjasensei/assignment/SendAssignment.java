@@ -12,7 +12,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
@@ -91,7 +90,7 @@ class SendAssignment {
             discardSnapshot(snapshot);
             throw new AssignmentRefused(
                     HttpStatus.BAD_GATEWAY, "The repository was copied, but could not be prepared. Please try again.");
-        } catch (DataAccessException e) {
+        } catch (RuntimeException e) {
             discardSnapshot(snapshot);
             throw e;
         }
@@ -137,7 +136,8 @@ class SendAssignment {
                 gitea.grantRead(name, instructorSub);
                 store.saveRepository(assignment, recipient.sub(), name, sshUrl);
                 return true;
-            } catch (RestClientException | DataAccessException e) {
+            } catch (RuntimeException e) {
+                // Whatever went wrong, the Instructor still has to hear about everyone.
                 log.warn("Attempt {} of {} at {} failed", attempt, ATTEMPTS_PER_REPOSITORY, name, e);
             }
             if (attempt < ATTEMPTS_PER_REPOSITORY) {

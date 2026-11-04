@@ -32,8 +32,8 @@ class SendAssignmentController {
     }
 
     @PostMapping("/api/assignments/{id}/repositories")
-    RepositoriesResult createRepositories(@PathVariable long id, JwtAuthenticationToken authentication) {
-        return new RepositoriesResult(sendAssignment.createRepositories(id, authentication.getName()));
+    RepositoriesResponse createRepositories(@PathVariable long id, JwtAuthenticationToken authentication) {
+        return new RepositoriesResponse(sendAssignment.createRepositories(id, authentication.getName()));
     }
 
     @ExceptionHandler
@@ -44,5 +44,5 @@ class SendAssignmentController {
     record Created(long id) {}
 
     /** The Students left without a StudentRepository. */
-    record RepositoriesResult(List<AssignmentStore.Recipient> failures) {}
+    record RepositoriesResponse(List<AssignmentStore.Recipient> failures) {}
 }

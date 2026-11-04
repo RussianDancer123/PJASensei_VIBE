@@ -83,7 +83,7 @@ public class GiteaClient {
      * Copies a SourceRepository once into a private repository, to become a snapshot. A failure leaves
      * nothing behind as far as possible, since a timeout says nothing about whether the copy worked.
      *
-     * @return the name of the copy, which {@link #prepareSnapshot} has to finish
+     * @return the name of the repository, which {@link #prepareSnapshot} has to finish
      * @throws RestClientException when Gitea cannot or will not copy it
      */
     public String importSource(String sourceUrl) {
@@ -106,7 +106,7 @@ public class GiteaClient {
     }
 
     /**
-     * Turns a copy into the snapshot that StudentRepositories start from. A template, because that is
+     * Turns that repository into the snapshot StudentRepositories start from. A template, because that is
      * how Gitea makes a repository with the same files and a new history.
      *
      * @throws RestClientException when Gitea cannot or will not do it
