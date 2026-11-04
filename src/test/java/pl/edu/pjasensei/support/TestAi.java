@@ -41,6 +41,7 @@ public final class TestAi {
     private volatile boolean forgettingEverySession;
     private volatile String sessionCreationBody;
     private volatile String replyBody;
+    private volatile String historyBody;
     private volatile byte[] lastMessageBody;
 
     TestAi() {
@@ -109,7 +110,13 @@ public final class TestAi {
         replyBody = body;
     }
 
+    /** A 200 to every history request, with this as its body. */
+    public void answerHistoryWith(String body) {
+        historyBody = body;
+    }
+
     public void behaveNormally() {
+        historyBody = null;
         sessionCreationDelay = Duration.ZERO;
         failureStatus = null;
         droppingConnections = false;
@@ -189,6 +196,10 @@ public final class TestAi {
         var history = forgettingEverySession ? null : sessions.get(id);
         if (history == null) {
             send(exchange, 404, Map.of("message", "Unknown session"));
+            return;
+        }
+        if (historyBody != null) {
+            sendRaw(exchange, historyBody);
             return;
         }
         send(exchange, 200, Map.of("messages", new ArrayList<>(history)));

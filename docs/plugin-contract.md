@@ -66,7 +66,7 @@ The plugin calls Spring directly with its access token, never the AI. `GET /api/
 { "content": "...", "files": [{ "path": "...", "content": "..." }] }
 ```
 
-Refusals and failures carry a readable `detail`:
+Refusals and failures carry a readable `detail`, except a 403, which comes with no body:
 
 | Status | Meaning                                                                                |
 | ------ | -------------------------------------------------------------------------------------- |
@@ -74,4 +74,4 @@ Refusals and failures carry a readable `detail`:
 | 403    | The caller is not a Student, or no Refresh has added them yet                          |
 | 404    | The caller has no StudentRepository for this Assignment                                |
 | 413    | A file is over 2 MB or the message over 10 MB, the starting values of configurable limits |
-| 502    | The AI failed, which affects only the chat                                             |
+| 502    | The AI failed, which affects only this tab                                             |

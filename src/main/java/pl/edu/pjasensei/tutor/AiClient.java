@@ -27,20 +27,22 @@ class AiClient {
     }
 
     JsonNode sendMessage(String session, byte[] message) {
-        return answerOf(http.post()
+        var answer = http.post()
                 .uri("/sessions/{id}/messages", session)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(message));
+                .body(message)
+                .retrieve()
+                .body(JsonNode.class);
+        if (answer == null || !answer.path("reply").isString()) {
+            throw new RestClientException("The AI answered a message without a reply.");
+        }
+        return answer;
     }
 
     JsonNode history(String session) {
-        return answerOf(http.get().uri("/sessions/{id}/messages", session));
-    }
-
-    private static JsonNode answerOf(RestClient.RequestHeadersSpec<?> request) {
-        var answer = request.retrieve().body(JsonNode.class);
-        if (answer == null) {
-            throw new RestClientException("The AI answered with nothing.");
+        var answer = http.get().uri("/sessions/{id}/messages", session).retrieve().body(JsonNode.class);
+        if (answer == null || !answer.path("messages").isArray()) {
+            throw new RestClientException("The AI answered for a history without messages.");
         }
         return answer;
     }

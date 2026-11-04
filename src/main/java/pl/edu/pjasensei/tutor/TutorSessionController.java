@@ -35,18 +35,18 @@ class TutorSessionController {
 
     @GetMapping
     JsonNode history(@PathVariable long id, JwtAuthenticationToken authentication) {
-        return sessions.call(studentRepositoryOf(id, authentication), ai::history);
+        return sessions.withSession(linkOf(id, authentication), ai::history);
     }
 
     @PostMapping
     JsonNode send(@PathVariable long id, InputStream body, JwtAuthenticationToken authentication) throws IOException {
-        var repository = studentRepositoryOf(id, authentication);
+        var link = linkOf(id, authentication);
         var message = messages.read(body);
-        return sessions.call(repository, session -> ai.sendMessage(session, message));
+        return sessions.withSession(link, session -> ai.sendMessage(session, message));
     }
 
-    private TutorSessions.StudentRepository studentRepositoryOf(long assignment, JwtAuthenticationToken authentication) {
-        return sessions.studentRepositoryOf(assignment, authentication.getName())
+    private TutorSessions.SessionLink linkOf(long assignment, JwtAuthenticationToken authentication) {
+        return sessions.linkOf(assignment, authentication.getName())
                 .orElseThrow(() -> new TutorRefused(HttpStatus.NOT_FOUND, "You have no such Assignment."));
     }
 

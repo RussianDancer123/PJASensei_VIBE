@@ -2,8 +2,13 @@ package pl.edu.pjasensei.tutor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.client.RestTestClient;
@@ -34,6 +40,9 @@ import pl.edu.pjasensei.support.TestIdentityProvider;
 class TutorSessionApiTest {
 
     private static final int MEGABYTE = 1024 * 1024;
+
+    @LocalServerPort
+    int port;
 
     @Autowired
     RestTestClient http;
@@ -166,7 +175,7 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void aMessageToAnUnknownSessionGoesToANewOneInstead() {
+    void aMessageToAnUnknownTutorSessionGoesToANewOneInstead() {
         var work = newWork();
         send(work, "{\"content\":\"lost\"}").expectStatus().isOk();
         int before = ai.sessionsCreated();
@@ -184,7 +193,7 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void theHistoryOfAnUnknownSessionIsThatOfANewOne() {
+    void theHistoryOfAnUnknownTutorSessionIsThatOfANewOne() {
         var work = newWork();
         send(work, "{\"content\":\"lost\"}").expectStatus().isOk();
         ai.forgetSessions();
@@ -193,7 +202,7 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void anUnknownSessionIsRetriedOnlyOnce() {
+    void anUnknownTutorSessionIsRetriedOnlyOnce() {
         var work = newWork();
         send(work, "{\"content\":\"first\"}").expectStatus().isOk();
         ai.forgetEverySessionAtOnce();
@@ -206,7 +215,7 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void simultaneousRequestsOnAnUnknownSessionGiveOneNewSession() throws Exception {
+    void simultaneousRequestsOnAnUnknownTutorSessionGiveOneNewOne() throws Exception {
         var work = newWork();
         send(work, "{\"content\":\"lost\"}").expectStatus().isOk();
         ai.forgetSessions();
@@ -342,7 +351,7 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void anAiThatAnswersWithAnErrorGivesAClearChatErrorAndAssignmentsStillWork() {
+    void anAiThatAnswersWithAnErrorGivesAClearErrorAndAssignmentsStillWork() {
         var work = newWork();
         ai.failWith(503);
 
@@ -356,7 +365,7 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void anAiThatCannotBeReachedGivesAClearChatErrorAndAssignmentsStillWork() {
+    void anAiThatCannotBeReachedGivesAClearErrorAndAssignmentsStillWork() {
         var work = newWork();
         send(work, "{\"content\":\"hello\"}").expectStatus().isOk();
         ai.dropConnections();
@@ -368,7 +377,7 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void anAiThatAnswersNonsenseGivesAChatError() {
+    void anAiThatAnswersNonsenseGivesAnError() {
         var work = newWork();
         ai.answerSessionCreationWith("{\"other\":\"field\"}");
         send(work, "{\"content\":\"hello\"}").expectStatus().isEqualTo(502);
@@ -383,7 +392,7 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void aSessionThatCouldNotBeMadeIsMadeOnTheNextTry() {
+    void aTutorSessionThatCouldNotBeMadeIsMadeOnTheNextTry() {
         var work = newWork();
         ai.failWith(503);
         send(work, "{\"content\":\"hello\"}").expectStatus().isEqualTo(502);
@@ -392,6 +401,56 @@ class TutorSessionApiTest {
         send(work, "{\"content\":\"hello\"}")
                 .expectStatus().isOk()
                 .expectBody().jsonPath("$.reply").isEqualTo("olleh");
+    }
+
+    @Test
+    void anAiAnswerOfTheWrongShapeGivesAnError() {
+        var work = newWork();
+        send(work, "{\"content\":\"made\"}").expectStatus().isOk();
+
+        ai.answerMessagesWith("{\"reply\":1}");
+        send(work, "{\"content\":\"hello\"}").expectStatus().isEqualTo(502);
+
+        ai.answerHistoryWith("{\"messages\":\"none\"}");
+        history(work).expectStatus().isEqualTo(502);
+    }
+
+    @Test
+    void anAiThatHangsOnNewTutorSessionsDoesNotHoldUpAssignments() throws Exception {
+        // More Students than the database connections Spring has, by default ten.
+        var taught = classroom.newTaughtClassGroup(12);
+        int assignment = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), taught.students());
+        int before = ai.sessionsCreated();
+        ai.delaySessionCreation(Duration.ofSeconds(6));
+        var messages = "/api/student/assignments/%d/tutor-session/messages".formatted(assignment);
+
+        // Not RestTestClient, which keeps only five connections and would be waiting for itself here.
+        try (var direct = HttpClient.newHttpClient();
+                var threads = Executors.newFixedThreadPool(taught.students().size())) {
+            for (var student : taught.students()) {
+                threads.submit(() -> direct.send(request(student.token(), messages), BodyHandlers.discarding()));
+            }
+            var giveUp = Instant.now().plusSeconds(5);
+            while (ai.sessionsCreated() - before < 5 && Instant.now().isBefore(giveUp)) {
+                Thread.sleep(50);
+            }
+            Thread.sleep(300);
+
+            var started = Instant.now();
+            var assignments = direct.send(
+                    request(taught.students().getFirst().token(), "/api/student/assignments"),
+                    BodyHandlers.discarding());
+
+            assertThat(assignments.statusCode()).isEqualTo(200);
+            assertThat(Duration.between(started, Instant.now())).isLessThan(Duration.ofSeconds(3));
+        }
+    }
+
+    private HttpRequest request(String token, String path) {
+        return HttpRequest.newBuilder(URI.create("http://localhost:%d%s".formatted(port, path)))
+                .header("Authorization", "Bearer " + token)
+                .build();
     }
 
     private void assignmentsStillWorkFor(Work work) {

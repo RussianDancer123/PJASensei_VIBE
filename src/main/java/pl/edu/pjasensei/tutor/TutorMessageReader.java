@@ -38,7 +38,8 @@ class TutorMessageReader {
         // Never more than the limit is held, however much the Student sends.
         var message = body.readNBytes(maxMessageBytes + 1);
         if (message.length > maxMessageBytes) {
-            throw new TutorRefused(HttpStatus.CONTENT_TOO_LARGE, "A message may be at most %s.".formatted(maxMessageSize));
+            throw new TutorRefused(
+                    HttpStatus.CONTENT_TOO_LARGE, "A message may be at most %s.".formatted(maxMessageSize));
         }
         check(parse(message));
         return message;
@@ -75,7 +76,8 @@ class TutorMessageReader {
 
     private static TutorRefused wrongShape() {
         return new TutorRefused(
-                HttpStatus.BAD_REQUEST, "A message needs text in \"content\", and each file a \"path\" and text in \"content\".");
+                HttpStatus.BAD_REQUEST,
+                "A message needs text in \"content\", and each file a \"path\" and text in \"content\".");
     }
 
     private static String readable(DataSize size) {

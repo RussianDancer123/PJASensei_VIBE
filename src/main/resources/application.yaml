@@ -1,7 +1,8 @@
 server:
   tomcat:
-    # What Tomcat reads of a refused body before it cuts the connection. Over the message limit, so
-    # that a Student who sends somewhat too much gets the answer saying so.
+    # What Tomcat reads of a refused body before it cuts the connection. Keep it over
+    # pjasensei.tutor.max-message-size, so that a Student who sends somewhat too much gets the answer
+    # saying so.
     max-swallow-size: 64MB
 
 spring:
