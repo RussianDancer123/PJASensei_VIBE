@@ -1,5 +1,5 @@
 // Stands in for the AI, keeping to the TutorSession and AI contract in the spec. It remembers messages
-// only while it runs, ignores attached files when answering, and replies with the reversed content.
+// only while it runs, ignores attached files when answering, and answers with the reversed question.
 // Only Spring calls this: Caddy has no route to it.
 const crypto = require("node:crypto");
 
@@ -8,13 +8,13 @@ const sessions = new Map();
 async function handleMockAi(request, response, pathname) {
   const path = pathname.slice("/ai".length);
 
-  if (path === "/sessions" && request.method === "POST") {
-    const sessionId = crypto.randomUUID();
-    sessions.set(sessionId, []);
-    return sendJson(response, 200, { sessionId });
+  if (path === "/conversations" && request.method === "POST") {
+    const conversationId = crypto.randomUUID();
+    sessions.set(conversationId, []);
+    return sendJson(response, 200, { conversation_id: conversationId });
   }
 
-  const [, sessionId] = path.match(/^\/sessions\/([^/]+)\/messages$/) ?? [];
+  const [, sessionId] = path.match(/^\/conversations\/([^/]+)\/messages$/) ?? [];
   if (!sessionId) {
     return sendJson(response, 404, { message: "No such address." });
   }
@@ -27,13 +27,13 @@ async function handleMockAi(request, response, pathname) {
     return sendJson(response, 200, { messages });
   }
   if (request.method === "POST") {
-    const { content, files } = JSON.parse(await readBody(request));
-    const reply = [...content].reverse().join("");
+    const { question, files } = JSON.parse(await readBody(request));
+    const answer = [...question].reverse().join("");
     messages.push(
-      { role: "student", content, ...(files?.length ? { files } : {}) },
-      { role: "tutor", content: reply },
+      { role: "user", content: question, ...(files?.length ? { files } : {}) },
+      { role: "assistant", content: answer },
     );
-    return sendJson(response, 200, { reply });
+    return sendJson(response, 200, { answer });
   }
   return sendJson(response, 405, { message: "No such method." });
 }

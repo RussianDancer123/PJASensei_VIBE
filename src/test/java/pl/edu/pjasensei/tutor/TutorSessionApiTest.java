@@ -243,19 +243,29 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void theMessageReachesTheAiExactlyAsItWasSent() {
+    void theAiGetsTheTextOfAMessageAsItsQuestionAndTheRestUnchanged() {
         var work = newWork();
-        var body = "{ \"extra\" : [1, 2.50],\n  \"content\":\"za\\u017cółć\" , \"files\":[] }\n"
-                .getBytes(StandardCharsets.UTF_8);
 
-        http.post().uri("/api/student/assignments/{id}/tutor-session/messages", work.assignment())
-                .header("Authorization", "Bearer " + work.student().token())
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .exchange()
-                .expectStatus().isOk();
+        send(work, "{\"extra\":[1,2.5],\"content\":\"zażółć\",\"files\":[]}").expectStatus().isOk();
 
-        assertThat(ai.lastMessageBody()).isEqualTo(body);
+        var message = ai.lastMessage();
+        assertThat(message.get("question").asString()).isEqualTo("zażółć");
+        assertThat(message.has("content")).isFalse();
+        assertThat(message.get("extra").toString()).isEqualTo("[1,2.5]");
+        assertThat(message.get("files").isArray()).isTrue();
+    }
+
+    @Test
+    void theAnswerOfTheAiComesBackAsTheReplyWithItsOtherFields() {
+        var work = newWork();
+        ai.answerMessagesWith("{\"answer\":\"hi\",\"prompt_score\":7}");
+
+        send(work, "{\"content\":\"hello\"}")
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.reply").isEqualTo("hi")
+                .jsonPath("$.answer").doesNotExist()
+                .jsonPath("$.prompt_score").isEqualTo(7);
     }
 
     @Test
@@ -408,7 +418,7 @@ class TutorSessionApiTest {
         var work = newWork();
         send(work, "{\"content\":\"made\"}").expectStatus().isOk();
 
-        ai.answerMessagesWith("{\"reply\":1}");
+        ai.answerMessagesWith("{\"answer\":1}");
         send(work, "{\"content\":\"hello\"}").expectStatus().isEqualTo(502);
 
         ai.answerHistoryWith("{\"messages\":\"none\"}");

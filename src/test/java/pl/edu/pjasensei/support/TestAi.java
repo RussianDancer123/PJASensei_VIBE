@@ -29,7 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 public final class TestAi {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final Pattern MESSAGES = Pattern.compile("/ai/sessions/([^/]+)/messages");
+    private static final Pattern MESSAGES = Pattern.compile("/ai/conversations/([^/]+)/messages");
 
     private final String url;
     private final Map<String, List<Object>> sessions = new ConcurrentHashMap<>();
@@ -42,7 +42,7 @@ public final class TestAi {
     private volatile String sessionCreationBody;
     private volatile String replyBody;
     private volatile String historyBody;
-    private volatile byte[] lastMessageBody;
+    private volatile JsonNode lastMessage;
 
     TestAi() {
         try {
@@ -73,9 +73,9 @@ public final class TestAi {
         return requests.get();
     }
 
-    /** Exactly what the last message arrived as. */
-    public byte[] lastMessageBody() {
-        return lastMessageBody;
+    /** What the last message arrived as. */
+    public JsonNode lastMessage() {
+        return lastMessage;
     }
 
     /** As a restarted AI would be: every session so far is unknown from now on. */
@@ -138,7 +138,7 @@ public final class TestAi {
             var path = exchange.getRequestURI().getPath();
             var method = exchange.getRequestMethod();
             var messages = MESSAGES.matcher(path);
-            if (path.equals("/ai/sessions") && method.equals("POST")) {
+            if (path.equals("/ai/conversations") && method.equals("POST")) {
                 createSession(exchange);
             } else if (messages.matches() && method.equals("POST")) {
                 sendMessage(exchange, messages.group(1));
@@ -152,6 +152,10 @@ public final class TestAi {
 
     private void createSession(HttpExchange exchange) throws IOException {
         sessionsCreated.incrementAndGet();
+        if (!JSON.readTree(exchange.getRequestBody().readAllBytes()).has("config")) {
+            send(exchange, 422, Map.of("detail", "config is required"));
+            return;
+        }
         try {
             Thread.sleep(sessionCreationDelay);
         } catch (InterruptedException e) {
@@ -163,12 +167,12 @@ public final class TestAi {
         }
         var id = UUID.randomUUID().toString();
         sessions.put(id, new CopyOnWriteArrayList<>());
-        send(exchange, 200, Map.of("sessionId", id));
+        send(exchange, 200, Map.of("conversation_id", id));
     }
 
     private void sendMessage(HttpExchange exchange, String id) throws IOException {
-        var body = exchange.getRequestBody().readAllBytes();
-        lastMessageBody = body;
+        JsonNode message = JSON.readTree(exchange.getRequestBody().readAllBytes());
+        lastMessage = message;
         var history = forgettingEverySession ? null : sessions.get(id);
         if (history == null) {
             send(exchange, 404, Map.of("message", "Unknown session"));
@@ -178,18 +182,17 @@ public final class TestAi {
             sendRaw(exchange, replyBody);
             return;
         }
-        JsonNode message = JSON.readTree(body);
-        var content = message.get("content").asString();
-        var reply = new StringBuilder(content).reverse().toString();
+        var question = message.get("question").asString();
+        var answer = new StringBuilder(question).reverse().toString();
         var student = new LinkedHashMap<String, Object>();
-        student.put("role", "student");
-        student.put("content", content);
+        student.put("role", "user");
+        student.put("content", question);
         if (message.has("files")) {
             student.put("files", message.get("files"));
         }
         history.add(student);
-        history.add(Map.of("role", "tutor", "content", reply));
-        send(exchange, 200, Map.of("reply", reply));
+        history.add(Map.of("role", "assistant", "content", answer));
+        send(exchange, 200, Map.of("answer", answer));
     }
 
     private void history(HttpExchange exchange, String id) throws IOException {
