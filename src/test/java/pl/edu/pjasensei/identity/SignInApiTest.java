@@ -54,14 +54,8 @@ class SignInApiTest {
     }
 
     @Test
-    void refusesATokenForAnotherClient() {
-        me(identityProvider.token(claims -> claims.claim("client_id", "another-client")))
-                .expectStatus().isUnauthorized();
-    }
-
-    @Test
-    void refusesATokenWithoutAClient() {
-        me(identityProvider.token(claims -> claims.claim("client_id", null))).expectStatus().isUnauthorized();
+    void acceptsATokenOfAnyAppClient() {
+        me(identityProvider.token(claims -> claims.claim("client_id", "plugin-client"))).expectStatus().isOk();
     }
 
     @Test

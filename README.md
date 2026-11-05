@@ -118,7 +118,7 @@ Spring has no code specific to the mock, so this takes environment variables alo
 | `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR`, `MOCKS_ADDRESS` | Remove, so that no mocks run                                      |
 | `IDENTITY_ISSUER`                                         | `https://cognito-idp.<region>.amazonaws.com/<user pool ID>`       |
 | `IDENTITY_JWK_SET_URI`                                    | `<issuer>/.well-known/jwks.json`                                  |
-| `IDENTITY_CLIENT_ID`                                      | The ID of the app client                                          |
+| `IDENTITY_CLIENT_ID`                                      | The ID of the front end's app client. Spring accepts any app client of the pool |
 | `COGNITO_REGION`                                          | The region of the user pool                                       |
 | `COGNITO_USER_POOL_ID`                                    | The ID of the user pool                                           |
 | `COGNITO_ACCESS_KEY_ID`, `COGNITO_SECRET_ACCESS_KEY`      | Credentials allowed `cognito-idp:ListUsersInGroup` and `cognito-idp:AdminGetUser` on the pool |

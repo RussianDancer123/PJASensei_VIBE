@@ -2,7 +2,8 @@
 // page never sees a password. The sign-in lives in sessionStorage, so it ends with the tab.
 const TOKEN_KEY = "pjasensei.accessToken";
 const PENDING_SIGN_IN_KEY = "pjasensei.pendingSignIn";
-const REDIRECT_URI = `${location.origin}/`;
+// Without a slash, as registered in Cognito: it compares the address character by character.
+const REDIRECT_URI = location.origin;
 
 // Embedded in an IDE plugin (docs/plugin-contract.md), the plugin signs in and hands over its token.
 // It stays in memory, because a parent on this origin shares sessionStorage with this page.
@@ -265,9 +266,16 @@ document.addEventListener("alpine:init", () => {
       }
     },
 
-    // Forgets the token here only: with real Cognito, its own login session stays open.
-    signOut() {
+    // Cognito also ends its own login session, which would otherwise sign the next person straight
+    // back in. The mock keeps none, so its discovery document has no end_session_endpoint.
+    async signOut() {
       sessionStorage.removeItem(TOKEN_KEY);
+      const { clientId, end_session_endpoint: endSession } = await identityProvider().catch(() => ({}));
+      if (endSession) {
+        // Cognito's own parameters, and logout_uri has to be one of the client's sign-out URLs.
+        location.assign(`${endSession}?${new URLSearchParams({ client_id: clientId, logout_uri: location.origin })}`);
+        return;
+      }
       this.me = null;
       this.error = null;
       this.classGroups = [];
@@ -326,7 +334,7 @@ async function startSignIn() {
     response_type: "code",
     client_id: clientId,
     redirect_uri: REDIRECT_URI,
-    scope: "openid",
+    scope: "openid email profile",
     state,
     code_challenge: await challengeOf(codeVerifier),
     code_challenge_method: "S256",
