@@ -10,6 +10,10 @@ const REDIRECT_URI = location.origin;
 const EMBEDDED = new URLSearchParams(location.search).has("embedded");
 let pluginToken = null;
 let pluginOrigins = [];
+// A VS Code webview has a different origin each time, so it is trusted by scheme (ADR 0002).
+let trustsWebview = false;
+let webviewOrigin = null;
+const WEBVIEW_SCHEME = "vscode-webview:";
 
 document.addEventListener("alpine:init", () => {
   Alpine.data("session", () => ({
@@ -231,10 +235,21 @@ document.addEventListener("alpine:init", () => {
 
     // The listener is in place before "ready" goes out, so the answer cannot be missed.
     async connectToPlugin() {
-      pluginOrigins = originsOf((await getJson("/config.json")).frameAncestors);
+      const frameAncestors = (await getJson("/config.json")).frameAncestors;
+      pluginOrigins = originsOf(frameAncestors);
+      trustsWebview = frameAncestors.split(/\s+/).includes(WEBVIEW_SCHEME);
+      // The webview's own origin is not in the list, so it is read from the browser. Only the
+      // direct parent's origin is taken, and a message still has to come from window.parent.
+      const parentOrigin = location.ancestorOrigins?.[0];
+      if (parentOrigin?.startsWith(`${WEBVIEW_SCHEME}//`)) {
+        webviewOrigin = parentOrigin;
+      }
       window.addEventListener("message", (event) => {
-        if (event.source !== window.parent || !pluginOrigins.includes(event.origin)) {
+        if (event.source !== window.parent || !isAllowedOrigin(event.origin)) {
           return;
+        }
+        if (event.origin.startsWith(`${WEBVIEW_SCHEME}//`)) {
+          webviewOrigin = event.origin;
         }
         if (event.data?.type === "token" && typeof event.data.accessToken === "string") {
           this.receiveToken(event.data.accessToken);
@@ -394,9 +409,14 @@ function originsOf(frameAncestors) {
   });
 }
 
+function isAllowedOrigin(origin) {
+  return pluginOrigins.includes(origin) || (trustsWebview && origin.startsWith(`${WEBVIEW_SCHEME}//`));
+}
+
 // Goes only to a parent on an allowed origin: the browser drops it for any other.
 function sendToPlugin(message) {
-  pluginOrigins.forEach((origin) => window.parent.postMessage(message, origin));
+  const targets = trustsWebview && webviewOrigin ? [...pluginOrigins, webviewOrigin] : pluginOrigins;
+  targets.forEach((origin) => window.parent.postMessage(message, origin));
 }
 
 async function fetchMe() {
