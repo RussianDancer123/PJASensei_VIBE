@@ -1,6 +1,7 @@
 package pl.edu.pjasensei.assignment;
 
 import java.util.List;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -9,6 +10,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClientException;
 import pl.edu.pjasensei.gitea.GiteaClient;
@@ -31,8 +33,20 @@ class StudentWorkController {
     }
 
     @GetMapping("/api/student/assignments")
-    Assignments list(JwtAuthenticationToken authentication) {
-        return new Assignments(store.assignmentsWithRepositoryOf(authentication.getName()));
+    Assignments list(
+            @RequestParam(name = "repository", required = false) List<String> repositories,
+            JwtAuthenticationToken authentication) {
+        if (repositories == null) {
+            return new Assignments(store.assignmentsWithRepositoryOf(authentication.getName()));
+        }
+        // Only the caller's own StudentRepositories are candidates, so the host and port can be ignored.
+        var wanted = repositories.stream()
+                .flatMap(address -> GitRemote.ownerAndName(address).stream())
+                .collect(Collectors.toSet());
+        return new Assignments(store.assignmentsWithRepositoryAddressesOf(authentication.getName()).stream()
+                .filter(a -> GitRemote.ownerAndName(a.sshUrl()).filter(wanted::contains).isPresent())
+                .map(a -> new AssignmentStore.AssignmentSummary(a.id(), a.title()))
+                .toList());
     }
 
     @GetMapping("/api/student/assignments/{id}")

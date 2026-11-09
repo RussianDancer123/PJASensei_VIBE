@@ -92,6 +92,19 @@ class AssignmentStore {
                 .list();
     }
 
+    /** As {@link #assignmentsWithRepositoryOf}, with the SSH address of each StudentRepository. */
+    List<AssignmentWithAddress> assignmentsWithRepositoryAddressesOf(String studentSub) {
+        return jdbc.sql("""
+                        SELECT a.id, a.title, sr.ssh_url
+                        FROM student_repositories sr JOIN assignments a ON a.id = sr.assignment_id
+                        WHERE sr.student_sub = ?
+                        ORDER BY a.id DESC
+                        """)
+                .param(studentSub)
+                .query(AssignmentWithAddress.class)
+                .list();
+    }
+
     Optional<StudentRepository> studentRepositoryOf(long assignment, String studentSub) {
         return jdbc.sql("""
                         SELECT a.title AS assignment_title, sr.repository_name, sr.ssh_url
@@ -140,6 +153,8 @@ class AssignmentStore {
     record RecipientAddress(String sub, String studentNumber, String sshUrl) {}
 
     record AssignmentSummary(long id, String title) {}
+
+    record AssignmentWithAddress(long id, String title, String sshUrl) {}
 
     record StudentRepository(String assignmentTitle, String repositoryName, String sshUrl) {}
 }

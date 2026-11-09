@@ -89,9 +89,11 @@ A Student's own routes need the Student role, and an Assignment without a Studen
 
 | Route                                         | Answer                                                                          |
 | --------------------------------------------- | ------------------------------------------------------------------------------- |
-| `GET /api/student/assignments`                | `{ "assignments": [{ "id", "title" }] }`, the newest first                      |
+| `GET /api/student/assignments`                | `{ "assignments": [{ "id", "title" }] }`, the newest first. With one or more `repository` parameters, each a git remote address, only the Assignments whose StudentRepository is one of them (see below) |
 | `GET /api/student/assignments/{id}`           | `{ "id", "title", "readme" }`, the README as raw text, read from Gitea through Spring |
 | `GET /api/student/assignments/{id}/ssh-address` | `{ "sshUrl" }`, which the **Clone** button shows as a `git clone` command to copy |
+
+`repository` takes `ssh://user@host[:port]/owner/name[.git]` or `user@host:owner/name[.git]`. Only `owner/name` counts, without regard to letter case; the host and the port are ignored. An address that is not of either form, or is not one of the caller's own StudentRepositories, matches nothing and gives an empty list, not an error.
 
 `readme` is the file at the top of the repository named `README` in any case, with no extension or with a text one (`md`, `markdown`, `txt`, `rst`, `adoc`, `org`), preferring `README.md`. It is `null` when there is none, and also when it is over 1 MiB, because a Student can push anything.
 

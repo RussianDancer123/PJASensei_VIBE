@@ -204,6 +204,7 @@ class StudentWorkApiTest {
 
         for (var path : List.of(
                 "/api/student/assignments",
+                "/api/student/assignments?repository=git@h:o/n.git",
                 "/api/student/assignments/" + id,
                 "/api/student/assignments/%d/ssh-address".formatted(id))) {
             get(taught.instructor().token(), path).expectStatus().isForbidden();
@@ -211,6 +212,106 @@ class StudentWorkApiTest {
             get(noLongerAStudent, path).expectStatus().isForbidden();
             http.get().uri(path).exchange().expectStatus().isUnauthorized();
         }
+    }
+
+    @Test
+    void theRepositoryFilterMatchesBothFormsOfAGitRemoteAddress() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        var url = gitea.newSourceRepository().url();
+        classroom.send(taught.instructor(), "Other", url, List.of(student));
+        int id = classroom.send(taught.instructor(), "Sorting", url, List.of(student));
+        var path = ownerAndName(id, student);
+
+        for (var remote : List.of(
+                "ssh://git@gitea.test:2222/" + path + ".git",
+                "ssh://git@gitea.test:2222/" + path,
+                "git@gitea.test:" + path + ".git",
+                "git@gitea.test:" + path,
+                "ssh://someone@alias/" + path.toUpperCase() + ".GIT",
+                "git@other-host:" + path.toUpperCase())) {
+            assertOnly(student, id, remote);
+        }
+    }
+
+    @Test
+    void severalRepositoryValuesGiveTheAssignmentsMatchingAnyOfThem() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        var url = gitea.newSourceRepository().url();
+        int first = classroom.send(taught.instructor(), "Sorting", url, List.of(student));
+        int second = classroom.send(taught.instructor(), "Graphs", url, List.of(student));
+        classroom.send(taught.instructor(), "Unasked", url, List.of(student));
+
+        withRepositories(student, "git@elsewhere.test:nobody/nothing.git",
+                        "git@h:" + ownerAndName(first, student),
+                        "git@h:" + ownerAndName(second, student))
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.assignments.length()").isEqualTo(2)
+                .jsonPath("$.assignments[0].id").isEqualTo(second)
+                .jsonPath("$.assignments[1].id").isEqualTo(first);
+    }
+
+    @Test
+    void anotherStudentsForeignOrUnparseableAddressGivesAnEmptyListNotAnError() {
+        var taught = classroom.newTaughtClassGroup(2);
+        var student = taught.students().get(0);
+        var other = taught.students().get(1);
+        var url = gitea.newSourceRepository().url();
+        classroom.send(taught.instructor(), "Mine", url, List.of(student));
+        int theirs = classroom.send(taught.instructor(), "Theirs", url, List.of(other));
+
+        for (var remote : List.of(
+                "git@gitea.test:" + ownerAndName(theirs, other),
+                "git@github.com:someone/else.git",
+                "not an address",
+                "ssh://",
+                "git@host:",
+                "git@host:one/two/three",
+                "https://",
+                "")) {
+            withRepositories(student, remote)
+                    .expectStatus().isOk()
+                    .expectBody().jsonPath("$.assignments").isEmpty();
+        }
+    }
+
+    private void assertOnly(Person student, int id, String remote) {
+        withRepositories(student, remote)
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.assignments.length()").isEqualTo(1)
+                .jsonPath("$.assignments[0].id").isEqualTo(id);
+    }
+
+    /** The {@code owner/name} of a StudentRepository, as Gitea says it. */
+    private String ownerAndName(int assignment, Person student) {
+        var address = gitea.repository(Classroom.studentRepositoryName(assignment, student))
+                .path("ssh_url")
+                .asString();
+        var path = address.startsWith("ssh://")
+                ? address.substring(address.indexOf('/', "ssh://".length()) + 1)
+                : address.substring(address.indexOf(':') + 1);
+        return path.replaceFirst("[.]git$", "");
+    }
+
+    /** Asks with a {@code repository} parameter per remote, as the plugin does. */
+    private RestTestClient.ResponseSpec withRepositories(Person student, String... remotes) {
+        return http.get()
+                .uri(builder -> {
+                    builder.path("/api/student/assignments");
+                    for (var remote : remotes) {
+                        builder.queryParam("repository", "{r" + remote.hashCode() + "}");
+                    }
+                    var values = new java.util.HashMap<String, Object>();
+                    for (var remote : remotes) {
+                        values.put("r" + remote.hashCode(), remote);
+                    }
+                    return builder.build(values);
+                })
+                .header("Authorization", "Bearer " + student.token())
+                .exchange();
     }
 
     private RestTestClient.ResponseSpec get(String token, String path) {
