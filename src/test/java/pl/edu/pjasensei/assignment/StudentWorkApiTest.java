@@ -2,6 +2,7 @@ package pl.edu.pjasensei.assignment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -301,12 +302,10 @@ class StudentWorkApiTest {
         return http.get()
                 .uri(builder -> {
                     builder.path("/api/student/assignments");
-                    for (var remote : remotes) {
-                        builder.queryParam("repository", "{r" + remote.hashCode() + "}");
-                    }
-                    var values = new java.util.HashMap<String, Object>();
-                    for (var remote : remotes) {
-                        values.put("r" + remote.hashCode(), remote);
+                    var values = new HashMap<String, Object>();
+                    for (int i = 0; i < remotes.length; i++) {
+                        builder.queryParam("repository", "{remote" + i + "}");
+                        values.put("remote" + i, remotes[i]);
                     }
                     return builder.build(values);
                 })

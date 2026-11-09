@@ -81,15 +81,9 @@ class AssignmentStore {
 
     /** The newest first. A recipient whose StudentRepository was never made has nothing to start. */
     List<AssignmentSummary> assignmentsWithRepositoryOf(String studentSub) {
-        return jdbc.sql("""
-                        SELECT a.id, a.title
-                        FROM student_repositories sr JOIN assignments a ON a.id = sr.assignment_id
-                        WHERE sr.student_sub = ?
-                        ORDER BY a.id DESC
-                        """)
-                .param(studentSub)
-                .query(AssignmentSummary.class)
-                .list();
+        return assignmentsWithRepositoryAddressesOf(studentSub).stream()
+                .map(a -> new AssignmentSummary(a.id(), a.title()))
+                .toList();
     }
 
     /** As {@link #assignmentsWithRepositoryOf}, with the SSH address of each StudentRepository. */
