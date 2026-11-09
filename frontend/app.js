@@ -40,6 +40,9 @@ document.addEventListener("alpine:init", () => {
     cloneCommand: null,
     copied: false,
     workError: null,
+    // Browser layout: the opened item of the list, as { kind: "mine" | "sent" | "send" | "keys", id }.
+    open: null,
+    copiedKey: null,
     // Plugin layout: which sections and rows are open.
     mineOpen: true,
     sentOpen: false,
@@ -84,6 +87,31 @@ document.addEventListener("alpine:init", () => {
     },
 
     renderMarkdown,
+
+    openItem(kind, id = null) {
+      this.open = { kind, id };
+      this.copiedKey = null;
+      this.workError = null;
+      this.browseError = null;
+      if (kind === "mine") {
+        this.openPreview(id);
+      } else if (kind === "sent") {
+        this.openSentAssignment(id);
+      }
+    },
+
+    isOpen(kind, id = null) {
+      return this.open?.kind === kind && this.open.id === id;
+    },
+
+    async copyText(text, key) {
+      try {
+        await navigator.clipboard.writeText(text);
+        this.copiedKey = key;
+      } catch {
+        this.workError = "Could not copy. Please select the text and copy it yourself.";
+      }
+    },
 
     async openSentAssignment(id) {
       this.browseError = null;
@@ -335,6 +363,8 @@ document.addEventListener("alpine:init", () => {
       this.workError = null;
       this.expandedMine = null;
       this.expandedSent = null;
+      this.open = null;
+      this.copiedKey = null;
       this.publicKey = "";
       this.keyMessage = null;
       this.keyError = null;

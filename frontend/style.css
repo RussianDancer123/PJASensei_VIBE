@@ -54,3 +54,30 @@ body:has(.compact) { margin: 0; }
 .primary:hover { background: var(--red-strong); }
 .recipient { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0; }
 .none { color: var(--maroon); font-size: 0.85em; border: 1px solid var(--maroon); border-radius: 999px; padding: 0 0.5em; white-space: nowrap; }
+
+/* Browser layout: a list on the left, the opened item on the right */
+body:not(:has(.compact)) { margin: 0; }
+.app .top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.6rem 1rem; background: var(--graphite); color: #fff; border-bottom: 3px solid var(--red); }
+.app .top button { margin-left: 0.5rem; }
+.shell { display: grid; grid-template-columns: minmax(14rem, 20rem) 1fr; min-height: 70vh; }
+.list { padding: 0.5rem; border-right: 1px solid var(--border); background: var(--surface); }
+.list h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 1rem 0.5rem 0.25rem; }
+.item { display: flex; justify-content: space-between; gap: 0.5rem; width: 100%; text-align: left; background: none; border: 0; border-radius: 6px; color: inherit; padding: 0.45rem 0.5rem; overflow-wrap: anywhere; }
+.item:hover { background: var(--surface-2); }
+.item.active { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--red); }
+.chev { color: var(--red); }
+.detail { padding: 1rem 1.5rem; min-width: 0; }
+.detail h1 { font-size: 1.3rem; margin-top: 0; }
+.back { display: none; }
+.detail table { border-collapse: collapse; width: 100%; }
+.detail td { border-top: 1px solid var(--border); padding: 0.4rem 0.5rem; }
+.detail td.num { font-family: var(--mono); font-weight: 600; }
+.clone-cmd { display: flex; gap: 0.4rem; }
+.clone-cmd input { flex: 1; min-width: 0; font-family: var(--mono); }
+.detail textarea, .detail input[type="text"], .detail input[type="url"], .detail input[type="search"] { width: 100%; }
+@media (max-width: 700px) {
+  .shell { grid-template-columns: 1fr; }
+  .app:not(.has-open) .detail, .app.has-open .list { display: none; }
+  .app.has-open .back { display: inline-block; background: none; border: 0; color: var(--red); padding: 0 0 0.5rem; }
+  .list { border-right: 0; }
+}
