@@ -241,14 +241,14 @@ document.addEventListener("alpine:init", () => {
       // The webview's own origin is not in the list, so it is read from the browser. Only the
       // direct parent's origin is taken, and a message still has to come from window.parent.
       const parentOrigin = location.ancestorOrigins?.[0];
-      if (parentOrigin?.startsWith(`${WEBVIEW_SCHEME}//`)) {
+      if (isWebviewOrigin(parentOrigin)) {
         webviewOrigin = parentOrigin;
       }
       window.addEventListener("message", (event) => {
         if (event.source !== window.parent || !isAllowedOrigin(event.origin)) {
           return;
         }
-        if (event.origin.startsWith(`${WEBVIEW_SCHEME}//`)) {
+        if (isWebviewOrigin(event.origin)) {
           webviewOrigin = event.origin;
         }
         if (event.data?.type === "token" && typeof event.data.accessToken === "string") {
@@ -409,8 +409,12 @@ function originsOf(frameAncestors) {
   });
 }
 
+function isWebviewOrigin(origin) {
+  return typeof origin === "string" && origin.startsWith(`${WEBVIEW_SCHEME}//`);
+}
+
 function isAllowedOrigin(origin) {
-  return pluginOrigins.includes(origin) || (trustsWebview && origin.startsWith(`${WEBVIEW_SCHEME}//`));
+  return pluginOrigins.includes(origin) || (trustsWebview && isWebviewOrigin(origin));
 }
 
 // Goes only to a parent on an allowed origin: the browser drops it for any other.
