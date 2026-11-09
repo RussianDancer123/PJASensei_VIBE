@@ -90,6 +90,7 @@ document.addEventListener("alpine:init", () => {
 
     openItem(kind, id = null) {
       this.open = { kind, id };
+      this.copiedKey = null;
       this.workError = null;
       this.browseError = null;
       if (kind === "mine") {
