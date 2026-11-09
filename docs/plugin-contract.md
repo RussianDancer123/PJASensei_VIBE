@@ -26,7 +26,7 @@ All messages use `window.postMessage`.
 | ------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------ |
 | Front end to plugin | `{ type: "ready" }`                       | Each time the front end loads, including after every reload                          |
 | Plugin to front end | `{ type: "token", accessToken }`          | In answer to `ready`, if signed in, and again whenever the token is renewed          |
-| Front end to plugin | `{ type: "clone", sshUrl, assignmentId }` | When someone clicks Get: a Student on their Assignment, an Instructor on a recipient |
+| Front end to plugin | `{ type: "clone", sshUrl, assignmentId }` | When someone clicks Clone: a Student on their Assignment, an Instructor on a recipient |
 
 - A plugin that is not signed in does not answer `ready`, and the front end waits. Once signed in, the plugin sends the token without waiting for another `ready`, or reloads the iframe.
 - A renewed token replaces the old one and leaves the page as it is. To change to a different person, reload the iframe, and answer the new `ready` with their token.

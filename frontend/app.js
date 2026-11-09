@@ -40,6 +40,11 @@ document.addEventListener("alpine:init", () => {
     cloneCommand: null,
     copied: false,
     workError: null,
+    // Plugin layout: which sections and rows are open.
+    mineOpen: true,
+    sentOpen: false,
+    expandedMine: null,
+    expandedSent: null,
     publicKey: "",
     registeringKey: false,
     keyMessage: null,
@@ -63,6 +68,22 @@ document.addEventListener("alpine:init", () => {
         this.browseError = error.message;
       }
     },
+
+    toggleMine(id) {
+      this.expandedMine = this.expandedMine === id ? null : id;
+      if (this.expandedMine !== null) {
+        this.openPreview(id);
+      }
+    },
+
+    toggleSent(id) {
+      this.expandedSent = this.expandedSent === id ? null : id;
+      if (this.expandedSent !== null) {
+        this.openSentAssignment(id);
+      }
+    },
+
+    renderMarkdown,
 
     async openSentAssignment(id) {
       this.browseError = null;
@@ -224,6 +245,8 @@ document.addEventListener("alpine:init", () => {
 
     async loadAccount() {
       this.me = await fetchMe();
+      // Someone with both roles starts on My Assignments; an Instructor alone has only the sent ones.
+      this.sentOpen = !this.isStudent;
       if (this.isInstructor) {
         this.classGroups = await fetchClassGroups();
         await this.reloadSentAssignments();
@@ -310,6 +333,8 @@ document.addEventListener("alpine:init", () => {
       this.cloneCommand = null;
       this.copied = false;
       this.workError = null;
+      this.expandedMine = null;
+      this.expandedSent = null;
       this.publicKey = "";
       this.keyMessage = null;
       this.keyError = null;
@@ -421,6 +446,11 @@ function isAllowedOrigin(origin) {
 function sendToPlugin(message) {
   const targets = trustsWebview && webviewOrigin ? [...pluginOrigins, webviewOrigin] : pluginOrigins;
   targets.forEach((origin) => window.parent.postMessage(message, origin));
+}
+
+// A README is pushed by anyone, so its HTML is made harmless before it is shown.
+function renderMarkdown(text) {
+  return DOMPurify.sanitize(marked.parse(text ?? ""));
 }
 
 async function fetchMe() {
