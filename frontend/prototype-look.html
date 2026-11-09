@@ -1,0 +1,313 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway. Question: what should the front end look like in the PJATK palette,
+  in the narrow plugin window (?embedded) and in the browser?
+  Three structurally different variants, switchable via ?variant=A|B|C, with fake data and no API calls.
+  Other params: mode=embedded|browser, role=student|instructor|both, theme=light|dark (default: system).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PJASensei look prototype</title>
+<style>
+  :root {
+    --red: #d8232a; --red-strong: #e30613; --maroon: #9a2e48;
+    --bg: #f6f5f3; --surface: #ffffff; --surface-2: #f0eeeb; --text: #1d1d1b; --muted: #6b6762;
+    --border: #e4e1dc; --code: #f3f1ee; --ok: #2e7d4f; --radius: 10px;
+    --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --red: #ef4a50; --red-strong: #ff5a5f; --maroon: #c9667f;
+      --bg: #161514; --surface: #201f1d; --surface-2: #2a2826; --text: #ecebe8; --muted: #a29d96;
+      --border: #3a3734; --code: #2a2826; --ok: #5fbf86; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --red: #ef4a50; --red-strong: #ff5a5f; --maroon: #c9667f;
+    --bg: #161514; --surface: #201f1d; --surface-2: #2a2826; --text: #ecebe8; --muted: #a29d96;
+    --border: #3a3734; --code: #2a2826; --ok: #5fbf86; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); padding-bottom: 80px; }
+  button { font: inherit; cursor: pointer; }
+  code, pre { font-family: var(--mono); font-size: 12.5px; }
+  h1, h2, h3 { margin: 0; line-height: 1.25; }
+  .muted { color: var(--muted); }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 12px; }
+  .btn:hover { border-color: var(--red); }
+  .btn.primary { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
+  .btn.primary:hover { background: var(--red-strong); }
+  .btn.small { padding: 3px 9px; font-size: 12.5px; }
+  .pill { display: inline-block; white-space: nowrap; font-size: 11.5px; padding: 1px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+  .pill.none { color: var(--maroon); }
+  .readme { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+  .readme h1 { font-size: 17px; margin-bottom: 6px; } .readme h2 { font-size: 14.5px; margin: 12px 0 4px; }
+  .readme p, .readme ul { margin: 6px 0; } .readme ul { padding-left: 20px; }
+  .readme code { background: var(--code); padding: 1px 4px; border-radius: 4px; }
+  .readme pre { background: var(--code); padding: 8px 10px; border-radius: 6px; overflow-x: auto; }
+  .clone-cmd { display: flex; gap: 6px; margin-top: 8px; }
+  .clone-cmd input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12.5px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--code); color: var(--text); }
+  .field { display: block; margin: 8px 0; } .field span { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 3px; }
+  .field input, .field textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: .2px; }
+  .brand .mark { width: 22px; height: 22px; border-radius: 6px; background: var(--red); color: #fff; display: grid; place-items: center; font-size: 12px; }
+  .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .toast { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; max-width: 92vw; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+
+  /* Frame that simulates the plugin's narrow side panel */
+  .stage { padding: 16px; }
+  .stage.embedded .app { max-width: 340px; margin: 0 auto; border: 1px dashed var(--border); min-height: 520px; background: var(--bg); }
+  .stage.browser .app { max-width: 1040px; margin: 0 auto; }
+
+  /* ---------- Variant A: stacked accordions ---------- */
+  .A header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 3px solid var(--red); background: var(--surface); }
+  .A main { padding: 12px; display: grid; gap: 12px; }
+  .stage.browser .A main { grid-template-columns: 1fr 1fr; align-items: start; }
+  .A .sec { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .A .sec > summary { list-style: none; padding: 10px 14px; font-weight: 600; display: flex; justify-content: space-between; cursor: pointer; }
+  .A .sec > summary::after { content: "▸"; color: var(--muted); transition: transform .15s; }
+  .A .sec[open] > summary::after { transform: rotate(90deg); }
+  .A .sec > summary .count { color: var(--muted); font-weight: 400; margin-left: auto; margin-right: 8px; }
+  .A .row { border-top: 1px solid var(--border); }
+  .A .row > summary { list-style: none; padding: 9px 14px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+  .A .row > summary::before { content: ""; width: 3px; align-self: stretch; border-radius: 2px; background: transparent; }
+  .A .row[open] > summary::before { background: var(--red); }
+  .A .row .body { padding: 0 14px 12px; }
+  .A .recipient { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px dashed var(--border); }
+  .A .recipient:first-child { border-top: 0; }
+  .A .recipient strong { font-family: var(--mono); font-size: 13px; }
+  .A .recipient .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .A footer { padding: 8px 14px; }
+
+  /* ---------- Variant B: list -> detail ---------- */
+  .B .top { background: #1d1d1b; color: #f6f5f3; border-bottom: 3px solid var(--red); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+  .B .top .brand .mark { background: var(--red); }
+  .B .top .who { font-size: 12px; opacity: .75; }
+  .B .shell { display: block; }
+  .stage.browser .B .shell { display: grid; grid-template-columns: 320px 1fr; min-height: 560px; }
+  .B .list { background: var(--surface); border-right: 1px solid var(--border); }
+  .B .list h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); padding: 14px 14px 6px; }
+  .B .item { width: 100%; text-align: left; background: none; border: 0; border-left: 3px solid transparent; padding: 10px 14px; color: var(--text); display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .B .item:hover { background: var(--surface-2); }
+  .B .item.active { border-left-color: var(--red); background: var(--surface-2); font-weight: 600; }
+  .B .item .chev { color: var(--muted); }
+  .B .detail { padding: 16px; }
+  .B .detail .back { background: none; border: 0; color: var(--red); padding: 0; margin-bottom: 10px; }
+  .B .detail h1 { font-size: 20px; margin-bottom: 4px; }
+  .B .detail .actions { position: sticky; bottom: 0; padding: 10px 0; background: linear-gradient(transparent, var(--bg) 30%); display: flex; gap: 8px; }
+  .B table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .B td { padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: middle; }
+  .B tr:first-child td { border-top: 0; }
+  .B td.num { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+  .B td.url { width: 100%; overflow-wrap: anywhere; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .stage.embedded .B td.url { display: none; }
+  .B .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-top: 12px; }
+
+  /* ---------- Variant C: tabs + dense rows + sheet ---------- */
+  .C .bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 12px 0; }
+  .C .bar .line { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .C .tabs { display: flex; gap: 2px; overflow-x: auto; }
+  .C .tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 7px 12px; color: var(--muted); white-space: nowrap; }
+  .C .tab.on { color: var(--text); border-bottom-color: var(--red); font-weight: 600; }
+  .C .search { margin: 10px 12px; } .C .search input { width: 100%; padding: 7px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; }
+  .C .rows { margin: 0 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .C .r { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--border); }
+  .C .r:first-child { border-top: 0; }
+  .C .r .t { flex: 1; min-width: 0; } .C .r .t b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .C .r .t small { color: var(--muted); }
+  .C .icon { min-width: 30px; height: 30px; padding: 0 10px; font-size: 12.5px; font-weight: 600; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); display: grid; place-items: center; }
+  .C .icon.go { background: var(--red); border-color: var(--red); color: #fff; }
+  .C .group { padding: 8px 12px 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); background: var(--surface-2); }
+  .C .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; }
+  .C .sheet-bg.on { display: block; }
+  .C .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 78vh; overflow: auto; background: var(--bg); border-radius: 14px 14px 0 0; padding: 14px; transform: translateY(100%); transition: transform .2s; }
+  .stage.browser .C .sheet { left: auto; top: 0; bottom: 0; width: 520px; max-height: none; border-radius: 0; transform: translateX(100%); }
+  .C .sheet.on { transform: none !important; }
+  .C .sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 10px; }
+  .C .pad { padding: 12px; }
+
+  /* Prototype switcher: deliberately not part of the design */
+  .proto-bar { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: #111; color: #fff; padding: 6px 8px; border-radius: 99px; box-shadow: 0 6px 20px rgba(0,0,0,.35); font: 12.5px var(--font); z-index: 10; flex-wrap: wrap; justify-content: center; max-width: 96vw; }
+  .proto-bar button { background: #333; color: #fff; border: 0; border-radius: 99px; padding: 4px 10px; }
+  .proto-bar button.on { background: #fff; color: #111; }
+  .proto-bar .lbl { padding: 0 6px; font-weight: 600; }
+  .proto-bar .sep { width: 1px; height: 18px; background: #555; }
+</style>
+</head>
+<body>
+<div id="stage" class="stage"><div class="app" id="app"></div></div>
+<div class="toast" id="toast"></div>
+<div class="proto-bar" id="bar"></div>
+
+<script>
+// ---------- fake data, shaped like the real API ----------
+const README = `<h1>Lab 3: Linked lists</h1>
+<p>Implement a singly linked list in Java. Keep every method <code>O(1)</code> where the description says so.</p>
+<h2>Tasks</h2>
+<ul><li><code>addFirst</code>, <code>addLast</code> and <code>removeFirst</code></li><li><code>reverse()</code> in place</li><li>An iterator that fails fast on modification</li></ul>
+<h2>Run the tests</h2>
+<pre>./gradlew test</pre>
+<p>Push to your repository before Sunday, 23:59.</p>`;
+const studentAssignments = [
+  { id: 3, title: "Lab 3: Linked lists", readme: README, sshUrl: "ssh://git@localhost:2222/pjasensei-spring/assignment-3-s17001.git" },
+  { id: 2, title: "Lab 2: Recursion and the call stack", readme: README.replace(/Lab 3: Linked lists/, "Lab 2: Recursion"), sshUrl: "ssh://git@localhost:2222/pjasensei-spring/assignment-2-s17001.git" },
+  { id: 1, title: "Lab 1: Hello Git", readme: null, sshUrl: "ssh://git@localhost:2222/pjasensei-spring/assignment-1-s17001.git" },
+];
+const rec = (n, a, ok = true) => ({ studentNumber: n, sshUrl: ok ? `ssh://git@localhost:2222/pjasensei-spring/assignment-${a}-${n}.git` : null });
+const sentAssignments = [
+  { id: 3, title: "Lab 3: Linked lists", recipients: [rec("s17001", 3), rec("s17002", 3), rec("s17005", 3, false), rec("s17009", 3), rec("s18011", 3)] },
+  { id: 2, title: "Lab 2: Recursion and the call stack", recipients: [rec("s17001", 2), rec("s17002", 2)] },
+  { id: 1, title: "Lab 1: Hello Git", recipients: [rec("s17001", 1), rec("s17002", 1), rec("s17009", 1)] },
+];
+const classGroups = [
+  { name: "17c", students: ["s17001", "s17002", "s17005", "s17009"] },
+  { name: "18c", students: ["s18011", "s18014"] },
+];
+
+// ---------- params ----------
+const P = new URLSearchParams(location.search);
+const get = (k, d) => P.get(k) ?? d;
+const state = { variant: get("variant", "A"), mode: get("mode", "embedded"), role: get("role", "student"), theme: get("theme", "system"),
+  open: null, tab: null, sheet: null, cloneFor: null };
+const VARIANTS = { A: "Stacked accordions", B: "List → detail", C: "Tabs + dense rows + sheet" };
+const embedded = () => state.mode === "embedded";
+const isStudent = () => state.role !== "instructor";
+const isInstructor = () => state.role !== "student";
+
+function setParam(k, v) { state[k] = v; P.set(k, v); history.replaceState(null, "", "?" + P.toString()); state.open = null; state.sheet = null; state.cloneFor = null; state.tab = null; render(); }
+
+// ---------- shared bits ----------
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 2200); }
+function clone(sshUrl, key) {
+  if (embedded()) { toast(`→ plugin: clone ${sshUrl.split("/").pop()}`); return; }
+  state.cloneFor = key; render();
+}
+function cloneCmd(sshUrl, key) {
+  if (embedded() || state.cloneFor !== key) return "";
+  return `<div class="clone-cmd"><input readonly value="git clone ${esc(sshUrl)}"><button class="btn small" onclick="toast('Copied')">Copy</button></div>`;
+}
+const readme = (a) => a.readme ? `<div class="readme">${a.readme}</div>` : `<p class="muted">This Assignment has no README to show.</p>`;
+const brand = () => `<div class="brand"><span class="mark">PS</span>PJASensei</div>`;
+const status = () => `<div class="status"><span class="dot"></span>Spring up</div>`;
+const who = () => embedded() ? "" : `<span class="muted" style="font-size:12.5px">s17001 · <a href="#" style="color:var(--red)">Sign out</a></span>`;
+function sshKeysForm() {
+  return `<p class="muted" style="margin-top:0">Needed for <code>git clone</code> outside the plugin. Paste the contents of your <code>.pub</code> file.</p>
+    <label class="field"><span>Public key</span><textarea rows="3" placeholder="ssh-ed25519 AAAA… you@laptop"></textarea></label>
+    <button class="btn primary small" onclick="toast('Key added')">Add key</button>`;
+}
+function sendForm() {
+  return `<label class="field"><span>Title</span><input placeholder="Lab 4: Hash maps"></label>
+    <label class="field"><span>Public GitHub URL</span><input placeholder="https://github.com/owner/repository"></label>
+    <label class="field"><span>Search by Student Number</span><input type="search"></label>
+    ${classGroups.map((g) => `<details style="margin:4px 0"><summary><label><input type="checkbox"> ${g.name} <span class="muted">(${g.students.length})</span></label></summary>
+      <div style="padding-left:22px">${g.students.map((s) => `<label style="display:block"><input type="checkbox"> <code>${s}</code></label>`).join("")}</div></details>`).join("")}
+    <p style="display:flex;gap:8px;margin-bottom:0"><button class="btn primary">Send to 0 selected</button><button class="btn" onclick="toast('Refreshing…')">Refresh ClassGroups</button></p>`;
+}
+const toggle = (k) => { state.open = state.open === k ? null : k; state.cloneFor = null; render(); };
+
+// ---------- Variant A ----------
+function variantA() {
+  const studentRows = studentAssignments.map((a) => `<details class="row" ${state.open === "s" + a.id ? "open" : ""}>
+      <summary onclick="event.preventDefault();toggle('s${a.id}')">${esc(a.title)}</summary>
+      <div class="body">${readme(a)}<p style="margin:10px 0 0"><button class="btn primary" onclick="clone('${a.sshUrl}','s${a.id}')">Clone</button></p>${cloneCmd(a.sshUrl, "s" + a.id)}</div></details>`).join("");
+  const sentRows = sentAssignments.map((a) => `<details class="row" ${state.open === "i" + a.id ? "open" : ""}>
+      <summary onclick="event.preventDefault();toggle('i${a.id}')">${esc(a.title)} <span class="pill" style="margin-left:auto">${a.recipients.length}</span></summary>
+      <div class="body">${a.recipients.map((r) => `<div class="recipient"><strong>${r.studentNumber}</strong>
+        <span class="grow muted">${r.sshUrl && !embedded() ? `<code>${esc(r.sshUrl)}</code>` : ""}</span>
+        ${r.sshUrl ? (embedded() ? `<button class="btn small" onclick="clone('${r.sshUrl}','r')">Clone</button>` : "") : `<span class="pill none">no repository</span>`}</div>`).join("")}</div></details>`).join("");
+  const sec = (title, count, body, open = true) => `<details class="sec" ${open ? "open" : ""}><summary>${title}<span class="count">${count ?? ""}</span></summary>${body}</details>`;
+  let html = `<div class="A"><header>${brand()}${who()}</header><main>`;
+  if (isStudent()) html += sec("My Assignments", studentAssignments.length, studentRows);
+  if (isInstructor()) html += sec("Sent Assignments", sentAssignments.length, sentRows, !isStudent());
+  if (isInstructor() && !embedded()) html += sec("Send an Assignment", "", `<div style="padding:0 14px 14px">${sendForm()}</div>`, false);
+  if (!embedded()) html += sec("SSH keys", "", `<div style="padding:0 14px 14px">${sshKeysForm()}</div>`, false);
+  return html + `</main><footer>${status()}</footer></div>`;
+}
+
+// ---------- Variant B ----------
+function variantB() {
+  const items = [];
+  if (isStudent()) items.push(["My Assignments", studentAssignments.map((a) => ["s" + a.id, a.title, ""])]);
+  if (isInstructor()) items.push(["Sent Assignments", sentAssignments.map((a) => ["i" + a.id, a.title, `<span class="pill">${a.recipients.length}</span>`])]);
+  if (!embedded()) items.push(["Account", [...(isInstructor() ? [["send", "Send an Assignment", ""]] : []), ["keys", "SSH keys", ""]]]);
+  if (!state.open && !embedded()) state.open = items[0][1][0][0];
+  const list = `<nav class="list">${items.map(([h, rows]) => `<h2>${h}</h2>` + rows.map(([k, t, extra]) =>
+    `<button class="item ${state.open === k ? "active" : ""}" onclick="state.open='${k}';state.cloneFor=null;render()"><span>${esc(t)}</span><span>${extra} <span class="chev">›</span></span></button>`).join("")).join("")}</nav>`;
+  let detail = "";
+  const k = state.open;
+  if (k?.startsWith("s")) {
+    const a = studentAssignments.find((x) => "s" + x.id === k);
+    detail = `<h1>${esc(a.title)}</h1><p class="muted" style="margin-top:0">Assignment</p>${readme(a)}
+      <div class="actions"><button class="btn primary" onclick="clone('${a.sshUrl}','${k}')">Clone</button></div>${cloneCmd(a.sshUrl, k)}`;
+  } else if (k?.startsWith("i")) {
+    const a = sentAssignments.find((x) => "i" + x.id === k);
+    const missing = a.recipients.filter((r) => !r.sshUrl).length;
+    detail = `<h1>${esc(a.title)}</h1><p class="muted" style="margin-top:0">${a.recipients.length} recipients${missing ? ` · ${missing} without a repository` : ""}</p>
+      <table>${a.recipients.map((r) => `<tr><td class="num">${r.studentNumber}</td><td class="url">${r.sshUrl ? esc(r.sshUrl) : ""}</td>
+      <td>${r.sshUrl ? (embedded() ? `<button class="btn small" onclick="clone('${r.sshUrl}','r')">Clone</button>` : `<button class="btn small" onclick="toast('Copied')">Copy</button>`) : `<span class="pill none">no repository</span>`}</td></tr>`).join("")}</table>`;
+  } else if (k === "send") detail = `<h1>Send an Assignment</h1><div class="card">${sendForm()}</div>`;
+  else if (k === "keys") detail = `<h1>SSH keys</h1><div class="card">${sshKeysForm()}</div>`;
+  const back = embedded() ? `<button class="back" onclick="state.open=null;render()">‹ Back</button>` : "";
+  const body = embedded() ? (k ? `<section class="detail">${back}${detail}</section>` : list) : `<div class="shell">${list}<section class="detail">${detail}</section></div>`;
+  return `<div class="B"><div class="top">${brand()}<span class="who">${embedded() ? "" : "s17001 · Sign out"}</span></div>${body}
+    <div style="padding:8px 14px">${status()}</div></div>`;
+}
+
+// ---------- Variant C ----------
+function variantC() {
+  const tabs = [];
+  if (isStudent()) tabs.push(["mine", "My work"]);
+  if (isInstructor()) tabs.push(["sent", "Sent"]);
+  if (isInstructor() && !embedded()) tabs.push(["send", "Send"]);
+  if (!embedded()) tabs.push(["keys", "SSH keys"]);
+  if (!state.tab || !tabs.some(([k]) => k === state.tab)) state.tab = tabs[0][0];
+  let body = "";
+  if (state.tab === "mine") {
+    body = `<div class="search"><input placeholder="Filter Assignments"></div><div class="rows">${studentAssignments.map((a) => `<div class="r">
+      <div class="t" onclick="state.sheet='s${a.id}';render()" style="cursor:pointer"><b>${esc(a.title)}</b><small>${a.readme ? "README" : "No README"} · tap to read</small></div>
+      <button class="icon go" onclick="clone('${a.sshUrl}','s${a.id}')">Clone</button></div>${!embedded() && state.cloneFor === "s" + a.id ? `<div style="padding:0 12px 10px">${cloneCmd(a.sshUrl, "s" + a.id)}</div>` : ""}`).join("")}</div>`;
+  } else if (state.tab === "sent") {
+    body = `<div class="search"><input placeholder="Filter by Assignment or Student Number"></div><div class="rows">${sentAssignments.map((a) => `<div class="group">${esc(a.title)} · ${a.recipients.length}</div>` +
+      a.recipients.map((r) => `<div class="r"><div class="t"><b style="font-family:var(--mono)">${r.studentNumber}</b>${r.sshUrl ? (embedded() ? "" : `<small style="font-family:var(--mono)">${esc(r.sshUrl)}</small>`) : `<small style="color:var(--maroon)">no repository</small>`}</div>
+        ${r.sshUrl ? `<button class="icon ${embedded() ? "go" : ""}" title="${embedded() ? "Clone" : "Copy"}" onclick="${embedded() ? `clone('${r.sshUrl}','r')` : "toast('Copied')"}">${embedded() ? "Clone" : "Copy"}</button>` : ""}</div>`).join("")).join("")}</div>`;
+  } else if (state.tab === "send") body = `<div class="pad"><div class="readme">${sendForm()}</div></div>`;
+  else body = `<div class="pad"><div class="readme">${sshKeysForm()}</div></div>`;
+  const a = state.sheet && studentAssignments.find((x) => "s" + x.id === state.sheet);
+  const sheet = `<div class="sheet-bg ${a ? "on" : ""}" onclick="state.sheet=null;render()"></div><div class="sheet ${a ? "on" : ""}">${a ? `<div class="grab"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3>${esc(a.title)}</h3><button class="btn primary small" onclick="clone('${a.sshUrl}','s${a.id}')">Clone</button></div>
+    ${cloneCmd(a.sshUrl, "s" + a.id)}${readme(a)}` : ""}</div>`;
+  return `<div class="C"><div class="bar"><div class="line">${brand()}${who() || status()}</div>
+    <div class="tabs">${tabs.map(([k, t]) => `<button class="tab ${state.tab === k ? "on" : ""}" onclick="state.tab='${k}';render()">${t}</button>`).join("")}</div></div>
+    ${body}${embedded() ? "" : `<div class="pad">${status()}</div>`}${sheet}</div>`;
+}
+
+// ---------- render + switcher ----------
+function render() {
+  document.documentElement.dataset.theme = state.theme === "system" ? "" : state.theme;
+  if (state.theme === "system") delete document.documentElement.dataset.theme;
+  document.getElementById("stage").className = "stage " + state.mode;
+  document.getElementById("app").innerHTML = ({ A: variantA, B: variantB, C: variantC })[state.variant]();
+  const keys = Object.keys(VARIANTS); const i = keys.indexOf(state.variant);
+  const opt = (k, vals) => vals.map((v) => `<button class="${state[k] === v ? "on" : ""}" onclick="setParam('${k}','${v}')">${v}</button>`).join("");
+  document.getElementById("bar").innerHTML =
+    `<button onclick="setParam('variant','${keys[(i + keys.length - 1) % keys.length]}')">←</button><span class="lbl">${state.variant} (${VARIANTS[state.variant]})</span>
+     <button onclick="setParam('variant','${keys[(i + 1) % keys.length]}')">→</button><span class="sep"></span>${opt("mode", ["embedded", "browser"])}
+     <span class="sep"></span>${opt("role", ["student", "instructor", "both"])}<span class="sep"></span>${opt("theme", ["system", "light", "dark"])}`;
+}
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea, [contenteditable]")) return;
+  const keys = Object.keys(VARIANTS); const i = keys.indexOf(state.variant);
+  if (e.key === "ArrowRight") setParam("variant", keys[(i + 1) % keys.length]);
+  if (e.key === "ArrowLeft") setParam("variant", keys[(i + keys.length - 1) % keys.length]);
+});
+render();
+</script>
+</body>
+</html>
