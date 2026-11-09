@@ -14,7 +14,7 @@ The iframe URL is the address of the front end with the query parameter `embedde
 
 To be allowed to embed it, the plugin's exact origin must be listed in `FRAME_ANCESTORS`, for example `FRAME_ANCESTORS="https://plugin.example"`. To call Spring from that origin, it must also be in `CORS_ALLOWED_ORIGINS`. Only a source written as a full `http` or `https` origin counts for messages. Anything else in `FRAME_ANCESTORS`, such as a wildcard or a bare host, may let a page embed the front end, but the front end will not talk to it.
 
-The one exception is a VS Code webview, whose origin is `vscode-webview://` plus an id that changes every time. Listing the entry `vscode-webview:` (for example `FRAME_ANCESTORS="'self' vscode-webview:"`) makes the front end talk to any origin of that scheme, as long as the message comes from `window.parent`, and it answers to exactly that message's origin. Without the entry a webview is ignored. See [ADR 0002](adr/0002-vs-code-webview-as-plugin-origin.md).
+The one exception is a VS Code webview, whose origin is `vscode-webview://` plus an id that changes every time. Listing the entry `vscode-webview:` (for example `FRAME_ANCESTORS="'self' vscode-webview:"`) makes the front end talk to any origin of that scheme, as long as the message comes from `window.parent`, and it answers only to its parent's origin, which it reads from the browser (`location.ancestorOrigins`, available in VS Code's Chromium) before the first message and then from the messages themselves. Without the entry a webview is ignored. See [ADR 0002](adr/0002-vs-code-webview-as-plugin-origin.md).
 
 The plugin is configured with the issuer and client ID itself. The plugin mock reads them from `/config.json` only because it shares Caddy's origin.
 
