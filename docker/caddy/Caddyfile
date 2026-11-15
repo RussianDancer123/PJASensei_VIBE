@@ -20,6 +20,8 @@
 
 	handle {
 		header Content-Security-Policy "frame-ancestors {$FRAME_ANCESTORS}"
+		# Revalidate every time, so a switched branch never pairs new HTML with a cached old app.js.
+		header Cache-Control "no-cache"
 		reverse_proxy {$FRONTEND_ADDRESS}
 	}
 }
