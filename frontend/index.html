@@ -168,7 +168,7 @@
             <template x-if="open?.kind === 'keys'">
               <article>
                 <h1>SSH keys</h1>
-                <p class="empty" x-show="keys.length === 0">You have no SSH keys yet.</p>
+                <p class="empty" x-show="keysLoaded && keys.length === 0">You have no SSH keys yet.</p>
                 <table x-show="keys.length > 0">
                   <template x-for="key in keys" :key="key.id">
                     <tr>

@@ -53,6 +53,7 @@ document.addEventListener("alpine:init", () => {
     keyMessage: null,
     keyError: null,
     keys: [],
+    keysLoaded: false,
 
     get isInstructor() {
       return this.me?.roles.includes("INSTRUCTOR");
@@ -97,6 +98,7 @@ document.addEventListener("alpine:init", () => {
       this.keyMessage = null;
       this.keyError = null;
       if (kind === "keys") {
+        this.keysLoaded = false;
         this.loadKeys();
       } else if (kind === "mine") {
         this.openPreview(id);
@@ -188,6 +190,7 @@ document.addEventListener("alpine:init", () => {
           throw new Error(await reasonFrom(response));
         }
         this.keys = await response.json();
+        this.keysLoaded = true;
       } catch (error) {
         this.keyError = error.message;
       }
@@ -410,6 +413,7 @@ document.addEventListener("alpine:init", () => {
       this.keyMessage = null;
       this.keyError = null;
       this.keys = [];
+      this.keysLoaded = false;
     },
 
     async refresh() {
