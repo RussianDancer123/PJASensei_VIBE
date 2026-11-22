@@ -89,9 +89,11 @@ A Student's own routes need the Student role, and an Assignment without a Studen
 
 | Route                                         | Answer                                                                          |
 | --------------------------------------------- | ------------------------------------------------------------------------------- |
-| `GET /api/student/assignments`                | `{ "assignments": [{ "id", "title" }] }`, the newest first                      |
+| `GET /api/student/assignments`                | `{ "assignments": [{ "id", "title" }] }`, the newest first. With one or more `repository` parameters, each a git remote address, only the Assignments whose StudentRepository is one of them (see below) |
 | `GET /api/student/assignments/{id}`           | `{ "id", "title", "readme" }`, the README as raw text, read from Gitea through Spring |
-| `GET /api/student/assignments/{id}/ssh-address` | `{ "sshUrl" }`, which the **Get** button shows as a `git clone` command to copy |
+| `GET /api/student/assignments/{id}/ssh-address` | `{ "sshUrl" }`, which the **Clone** button shows as a `git clone` command to copy |
+
+`repository` takes `ssh://user@host[:port]/owner/name[.git]` or `user@host:owner/name[.git]`. Only `owner/name` counts, without regard to letter case; the host and the port are ignored. An address that is not of either form, or is not one of the caller's own StudentRepositories, matches nothing and gives an empty list, not an error.
 
 `readme` is the file at the top of the repository named `README` in any case, with no extension or with a text one (`md`, `markdown`, `txt`, `rst`, `adoc`, `org`), preferring `README.md`. It is `null` when there is none, and also when it is over 1 MiB, because a Student can push anything.
 
@@ -105,7 +107,7 @@ git clone ssh://git@localhost:2222/pjasensei-spring/assignment-1-s17001.git
 
 The real IDE plugin is not part of this repository. [`docs/plugin-contract.md`](docs/plugin-contract.md) is what it has to implement, and `/plugin-mock` is a stand-in that keeps to that contract.
 
-To try the whole flow, open `/plugin-mock` and sign in with its button. The Assignments tab is the real front end in an iframe, which uses the plugin's token. Paste an SSH public key in the plugin mock's field. Then click **Get**, on an Assignment as a Student or on a recipient of an opened Assignment as an Instructor, and the plugin mock shows a `git clone` command to copy. The Get button on recipients exists only in the iframe. **Renew token** gets a new token the way the plugin mock otherwise does by itself a minute before the old one expires, and passes it on to the iframe. 
+To try the whole flow, open `/plugin-mock` and sign in with its button. The Assignments tab is the real front end in an iframe, which uses the plugin's token. Paste an SSH public key in the plugin mock's field. Then click **Clone**, on an Assignment as a Student or on a recipient of an opened Assignment as an Instructor, and the plugin mock shows a `git clone` command to copy. **Renew token** gets a new token the way the plugin mock otherwise does by itself a minute before the old one expires, and passes it on to the iframe. 
 
 The Chat tab talks to Spring directly with the plugin's token. Choose an Assignment, send a message with text files if you like, and the mock AI answers with the reversed text. Earlier messages show when you come back, for as long as the mocks keep running, because the mock AI remembers them only in memory. After a restart of the mocks Spring starts a new TutorSession by itself and the old messages are gone. To see the error of a failing AI, run `docker compose -p pjasensei-11 stop mocks`, with `-p` matching your stack: the Assignments stay readable as long as your token is valid.
 
@@ -118,7 +120,7 @@ Spring has no code specific to the mock, so this takes environment variables alo
 | `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR`, `MOCKS_ADDRESS` | Remove, so that no mocks run                                      |
 | `IDENTITY_ISSUER`                                         | `https://cognito-idp.<region>.amazonaws.com/<user pool ID>`       |
 | `IDENTITY_JWK_SET_URI`                                    | `<issuer>/.well-known/jwks.json`                                  |
-| `IDENTITY_CLIENT_ID`                                      | The ID of the app client                                          |
+| `IDENTITY_CLIENT_ID`                                      | The ID of the front end's app client. Spring accepts any app client of the pool |
 | `COGNITO_REGION`                                          | The region of the user pool                                       |
 | `COGNITO_USER_POOL_ID`                                    | The ID of the user pool                                           |
 | `COGNITO_ACCESS_KEY_ID`, `COGNITO_SECRET_ACCESS_KEY`      | Credentials allowed `cognito-idp:ListUsersInGroup` and `cognito-idp:AdminGetUser` on the pool |

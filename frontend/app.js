@@ -2,13 +2,18 @@
 // page never sees a password. The sign-in lives in sessionStorage, so it ends with the tab.
 const TOKEN_KEY = "pjasensei.accessToken";
 const PENDING_SIGN_IN_KEY = "pjasensei.pendingSignIn";
-const REDIRECT_URI = `${location.origin}/`;
+// Without a slash, as registered in Cognito: it compares the address character by character.
+const REDIRECT_URI = location.origin;
 
 // Embedded in an IDE plugin (docs/plugin-contract.md), the plugin signs in and hands over its token.
 // It stays in memory, because a parent on this origin shares sessionStorage with this page.
 const EMBEDDED = new URLSearchParams(location.search).has("embedded");
 let pluginToken = null;
 let pluginOrigins = [];
+// A VS Code webview has a different origin each time, so it is trusted by scheme (ADR 0002).
+let trustsWebview = false;
+let webviewOrigin = null;
+const WEBVIEW_SCHEME = "vscode-webview:";
 
 document.addEventListener("alpine:init", () => {
   Alpine.data("session", () => ({
@@ -35,6 +40,14 @@ document.addEventListener("alpine:init", () => {
     cloneCommand: null,
     copied: false,
     workError: null,
+    // Browser layout: the opened item of the list, as { kind: "mine" | "sent" | "send" | "keys", id }.
+    open: null,
+    copiedKey: null,
+    // Plugin layout: which sections and rows are open.
+    mineOpen: true,
+    sentOpen: false,
+    expandedMine: null,
+    expandedSent: null,
     publicKey: "",
     registeringKey: false,
     keyMessage: null,
@@ -56,6 +69,47 @@ document.addEventListener("alpine:init", () => {
         this.sentAssignments = await fetchSentAssignments();
       } catch (error) {
         this.browseError = error.message;
+      }
+    },
+
+    toggleMine(id) {
+      this.expandedMine = this.expandedMine === id ? null : id;
+      if (this.expandedMine !== null) {
+        this.openPreview(id);
+      }
+    },
+
+    toggleSent(id) {
+      this.expandedSent = this.expandedSent === id ? null : id;
+      if (this.expandedSent !== null) {
+        this.openSentAssignment(id);
+      }
+    },
+
+    renderMarkdown,
+
+    openItem(kind, id = null) {
+      this.open = { kind, id };
+      this.copiedKey = null;
+      this.workError = null;
+      this.browseError = null;
+      if (kind === "mine") {
+        this.openPreview(id);
+      } else if (kind === "sent") {
+        this.openSentAssignment(id);
+      }
+    },
+
+    isOpen(kind, id = null) {
+      return this.open?.kind === kind && this.open.id === id;
+    },
+
+    async copyText(text, key) {
+      try {
+        await navigator.clipboard.writeText(text);
+        this.copiedKey = key;
+      } catch {
+        this.workError = "Could not copy. Please select the text and copy it yourself.";
       }
     },
 
@@ -219,6 +273,8 @@ document.addEventListener("alpine:init", () => {
 
     async loadAccount() {
       this.me = await fetchMe();
+      // Someone with both roles starts on My Assignments; an Instructor alone has only the sent ones.
+      this.sentOpen = !this.isStudent;
       if (this.isInstructor) {
         this.classGroups = await fetchClassGroups();
         await this.reloadSentAssignments();
@@ -230,10 +286,21 @@ document.addEventListener("alpine:init", () => {
 
     // The listener is in place before "ready" goes out, so the answer cannot be missed.
     async connectToPlugin() {
-      pluginOrigins = originsOf((await getJson("/config.json")).frameAncestors);
+      const frameAncestors = (await getJson("/config.json")).frameAncestors;
+      pluginOrigins = originsOf(frameAncestors);
+      trustsWebview = frameAncestors.split(/\s+/).includes(WEBVIEW_SCHEME);
+      // The webview's own origin is not in the list, so it is read from the browser. Only the
+      // direct parent's origin is taken, and a message still has to come from window.parent.
+      const parentOrigin = location.ancestorOrigins?.[0];
+      if (isWebviewOrigin(parentOrigin)) {
+        webviewOrigin = parentOrigin;
+      }
       window.addEventListener("message", (event) => {
-        if (event.source !== window.parent || !pluginOrigins.includes(event.origin)) {
+        if (event.source !== window.parent || !isAllowedOrigin(event.origin)) {
           return;
+        }
+        if (isWebviewOrigin(event.origin)) {
+          webviewOrigin = event.origin;
         }
         if (event.data?.type === "token" && typeof event.data.accessToken === "string") {
           this.receiveToken(event.data.accessToken);
@@ -265,9 +332,16 @@ document.addEventListener("alpine:init", () => {
       }
     },
 
-    // Forgets the token here only: with real Cognito, its own login session stays open.
-    signOut() {
+    // Cognito also ends its own login session, which would otherwise sign the next person straight
+    // back in. The mock keeps none, so its discovery document has no end_session_endpoint.
+    async signOut() {
       sessionStorage.removeItem(TOKEN_KEY);
+      const { clientId, end_session_endpoint: endSession } = await identityProvider().catch(() => ({}));
+      if (endSession) {
+        // Cognito's own parameters, and logout_uri has to be one of the client's sign-out URLs.
+        location.assign(`${endSession}?${new URLSearchParams({ client_id: clientId, logout_uri: location.origin })}`);
+        return;
+      }
       this.me = null;
       this.error = null;
       this.classGroups = [];
@@ -287,6 +361,10 @@ document.addEventListener("alpine:init", () => {
       this.cloneCommand = null;
       this.copied = false;
       this.workError = null;
+      this.expandedMine = null;
+      this.expandedSent = null;
+      this.open = null;
+      this.copiedKey = null;
       this.publicKey = "";
       this.keyMessage = null;
       this.keyError = null;
@@ -326,7 +404,7 @@ async function startSignIn() {
     response_type: "code",
     client_id: clientId,
     redirect_uri: REDIRECT_URI,
-    scope: "openid",
+    scope: "openid email profile",
     state,
     code_challenge: await challengeOf(codeVerifier),
     code_challenge_method: "S256",
@@ -386,9 +464,23 @@ function originsOf(frameAncestors) {
   });
 }
 
+function isWebviewOrigin(origin) {
+  return typeof origin === "string" && origin.startsWith(`${WEBVIEW_SCHEME}//`);
+}
+
+function isAllowedOrigin(origin) {
+  return pluginOrigins.includes(origin) || (trustsWebview && isWebviewOrigin(origin));
+}
+
 // Goes only to a parent on an allowed origin: the browser drops it for any other.
 function sendToPlugin(message) {
-  pluginOrigins.forEach((origin) => window.parent.postMessage(message, origin));
+  const targets = trustsWebview && webviewOrigin ? [...pluginOrigins, webviewOrigin] : pluginOrigins;
+  targets.forEach((origin) => window.parent.postMessage(message, origin));
+}
+
+// A README is pushed by anyone, so its HTML is made harmless before it is shown.
+function renderMarkdown(text) {
+  return DOMPurify.sanitize(marked.parse(text ?? ""));
 }
 
 async function fetchMe() {

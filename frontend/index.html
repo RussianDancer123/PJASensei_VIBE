@@ -5,153 +5,245 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PJASensei</title>
   <script defer src="/app.js"></script>
+  <script src="/vendor/marked-15.0.12.min.js"></script>
+  <script src="/vendor/dompurify-3.2.6.min.js"></script>
   <script defer src="/vendor/alpine-3.17.5.min.js"></script>
-  <style>
-    /* Keeps the page usable in the narrow window of an IDE plugin. */
-    textarea, input { box-sizing: border-box; max-width: 100%; }
-    pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
-    @media (max-width: 480px) {
-      body { margin: 0.5rem; }
-    }
-  </style>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h1>PJASensei</h1>
-
-  <div x-data="session">
+  <div x-data="session" :class="embedded && 'compact'">
+    <h1>PJASensei</h1>
     <p x-show="error" role="alert" x-text="error"></p>
-    <template x-if="me">
-      <div>
-        <p>Signed in as <strong x-text="me.username"></strong></p>
-        <p>Roles: <strong x-text="me.roles.join(', ') || 'none'"></strong></p>
-        <button x-show="!embedded" @click="signOut">Sign out</button>
 
-        <section x-show="isStudent">
-          <h2>My Assignments</h2>
-          <p x-show="assignments.length === 0">No Assignments to show yet.</p>
-          <ul>
+    <!-- Plugin: stacked collapsible sections -->
+    <template x-if="embedded && me">
+      <div class="sections">
+        <section class="panel" x-show="isStudent">
+          <button class="head" @click="mineOpen = !mineOpen" :aria-expanded="mineOpen">
+            <span>My Assignments</span><span class="chevron" x-text="mineOpen ? '▾' : '▸'"></span>
+          </button>
+          <div class="body" x-show="mineOpen">
+            <p class="empty" x-show="assignments.length === 0">No Assignments to show yet.</p>
             <template x-for="assignment in assignments" :key="assignment.id">
-              <li><button @click="openPreview(assignment.id)" x-text="assignment.title"></button></li>
-            </template>
-          </ul>
-
-          <template x-if="preview">
-            <article>
-              <h3 x-text="preview.title"></h3>
-              <pre x-show="preview.readme !== null" x-text="preview.readme"></pre>
-              <p x-show="preview.readme === null">This Assignment has no README to show.</p>
-              <button @click="getRepository">Get</button>
-              <template x-if="cloneCommand">
-                <p>
-                  <label>Clone command <input type="text" readonly size="70" :value="cloneCommand"></label>
-                  <button @click="copyCloneCommand" x-text="copied ? 'Copied' : 'Copy'"></button>
-                </p>
-              </template>
-            </article>
-          </template>
-          <p x-show="workError" role="alert" x-text="workError"></p>
-        </section>
-
-        <section>
-          <h2>SSH keys</h2>
-          <form @submit.prevent="registerKey">
-            <p><label>Public key (the contents of a .pub file)<br>
-              <textarea x-model="publicKey" required rows="3" cols="70"></textarea>
-            </label></p>
-            <p><button :disabled="registeringKey">Add key</button></p>
-          </form>
-          <p x-show="keyMessage" role="status" x-text="keyMessage"></p>
-          <p x-show="keyError" role="alert" x-text="keyError"></p>
-        </section>
-
-        <section x-show="isInstructor">
-          <h2>ClassGroups</h2>
-          <button @click="refresh" :disabled="refreshing" x-text="refreshing ? 'Refreshing…' : 'Refresh'"></button>
-
-          <template x-if="refreshFailures.length > 0">
-            <div role="alert">
-              <p>Refresh could not do all of this:</p>
-              <ul>
-                <template x-for="failure in refreshFailures">
-                  <li x-text="[failure.classGroup, failure.person, failure.reason].filter(Boolean).join(': ')"></li>
-                </template>
-              </ul>
-            </div>
-          </template>
-
-          <p x-show="classGroups.length === 0">No ClassGroups with Students to show. Click Refresh to load the ones you teach.</p>
-          <form x-show="classGroups.length > 0" @submit.prevent="send">
-            <h2>Send an Assignment</h2>
-            <p><label>Title <input type="text" x-model="title" required maxlength="200"></label></p>
-            <p><label>Public GitHub URL
-              <input type="url" x-model="sourceUrl" required placeholder="https://github.com/owner/repository">
-            </label></p>
-
-            <p><label>Search by Student Number <input type="search" x-model="search"></label></p>
-            <template x-for="classGroup in classGroups" :key="classGroup.name">
-              <details x-show="matchingStudents(classGroup).length > 0" :open="search !== ''">
-                <summary>
-                  <label>
-                    <input type="checkbox"
-                           :checked="areMatchingStudentsSelected(classGroup)"
-                           @change="selectMatchingStudents(classGroup, $event.target.checked)">
-                    <span x-text="`${classGroup.name} (${classGroup.students.length})`"></span>
-                  </label>
-                </summary>
-                <ul>
-                  <template x-for="student in matchingStudents(classGroup)" :key="student.sub">
-                    <li>
-                      <label>
-                        <input type="checkbox" :value="student.sub" x-model="selected">
-                        <span x-text="`${student.studentNumber} (${student.email})`"></span>
-                      </label>
-                    </li>
+              <div class="row">
+                <button class="head" @click="toggleMine(assignment.id)" :aria-expanded="expandedMine === assignment.id">
+                  <span x-text="assignment.title"></span>
+                  <span class="chevron" x-text="expandedMine === assignment.id ? '▾' : '▸'"></span>
+                </button>
+                <div class="body" x-show="expandedMine === assignment.id">
+                  <template x-if="preview && preview.id === assignment.id">
+                    <div>
+                      <div class="readme" x-show="preview.readme !== null" x-html="renderMarkdown(preview.readme)"></div>
+                      <p x-show="preview.readme === null">This Assignment has no README to show.</p>
+                      <button class="primary" @click="getRepository">Clone</button>
+                    </div>
                   </template>
-                </ul>
-              </details>
+                </div>
+              </div>
             </template>
-
-            <p><button :disabled="sendStep !== null || selected.length === 0"
-                       x-text="`Send to ${selected.length} selected`"></button></p>
-          </form>
-
-          <p x-show="sendStep === 'copying'" role="status">Copying the repository… <progress></progress></p>
-          <p x-show="sendStep === 'creating'" role="status">
-            Repository copied. Creating StudentRepositories… <progress></progress>
-          </p>
-          <p x-show="sentMessage" role="status" x-text="sentMessage"></p>
-          <p x-show="sendError" role="alert" x-text="sendError"></p>
-          <p x-show="studentNumbersWithoutRepository.length > 0" role="alert"
-             x-text="`No StudentRepository could be made for: ${studentNumbersWithoutRepository.join(', ')}.`"></p>
+            <p x-show="workError" role="alert" x-text="workError"></p>
+          </div>
         </section>
 
-        <section x-show="isInstructor">
-          <h2>My sent Assignments</h2>
-          <p x-show="sentAssignments.length === 0">You have not sent any Assignments yet.</p>
-          <ul>
+        <section class="panel" x-show="isInstructor">
+          <button class="head" @click="sentOpen = !sentOpen" :aria-expanded="sentOpen">
+            <span>Sent Assignments</span><span class="chevron" x-text="sentOpen ? '▾' : '▸'"></span>
+          </button>
+          <div class="body" x-show="sentOpen">
+            <p class="empty" x-show="sentAssignments.length === 0">You have not sent any Assignments yet.</p>
             <template x-for="assignment in sentAssignments" :key="assignment.id">
-              <li><button @click="openSentAssignment(assignment.id)" x-text="assignment.title"></button></li>
+              <div class="row">
+                <button class="head" @click="toggleSent(assignment.id)" :aria-expanded="expandedSent === assignment.id">
+                  <span x-text="assignment.title"></span>
+                  <span class="chevron" x-text="expandedSent === assignment.id ? '▾' : '▸'"></span>
+                </button>
+                <div class="body" x-show="expandedSent === assignment.id">
+                  <template x-if="openedAssignment && openedAssignment.id === assignment.id">
+                    <div>
+                      <template x-for="recipient in openedAssignment.recipients" :key="recipient.sub">
+                        <div class="recipient">
+                          <strong x-text="recipient.studentNumber"></strong>
+                          <button class="primary" x-show="recipient.sshUrl"
+                                  @click="sendCloneToPlugin(recipient.sshUrl, openedAssignment.id)">Clone</button>
+                          <span class="none" x-show="!recipient.sshUrl">no repository</span>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
             </template>
-          </ul>
-
-          <template x-if="openedAssignment">
-            <article>
-              <h3 x-text="openedAssignment.title"></h3>
-              <ul>
-                <template x-for="recipient in openedAssignment.recipients" :key="recipient.sub">
-                  <li>
-                    <strong x-text="recipient.studentNumber"></strong>:
-                    <code x-show="recipient.sshUrl" x-text="recipient.sshUrl"></code>
-                    <span x-show="!recipient.sshUrl">no repository</span>
-                    <button x-show="embedded && recipient.sshUrl"
-                            @click="sendCloneToPlugin(recipient.sshUrl, openedAssignment.id)">Get</button>
-                  </li>
-                </template>
-              </ul>
-            </article>
-          </template>
-          <p x-show="browseError" role="alert" x-text="browseError"></p>
+            <p x-show="browseError" role="alert" x-text="browseError"></p>
+          </div>
         </section>
+      </div>
+    </template>
+
+    <!-- Browser: a list on the left, the opened item on the right -->
+    <template x-if="!embedded && me">
+      <div class="app" :class="open && 'has-open'">
+        <header class="top">
+          <strong class="brand">PJASensei</strong>
+          <span class="who">
+            <span x-text="me.username"></span> · <span x-text="me.roles.join(', ') || 'no role'"></span>
+            <button @click="signOut">Sign out</button>
+          </span>
+        </header>
+
+        <div class="shell">
+          <nav class="list">
+            <template x-if="isStudent">
+              <div>
+                <h2>My Assignments</h2>
+                <p class="empty" x-show="assignments.length === 0">No Assignments to show yet.</p>
+                <template x-for="assignment in assignments" :key="assignment.id">
+                  <button class="item" :class="isOpen('mine', assignment.id) && 'active'"
+                          @click="openItem('mine', assignment.id)">
+                    <span x-text="assignment.title"></span><span class="chev">›</span>
+                  </button>
+                </template>
+              </div>
+            </template>
+            <template x-if="isInstructor">
+              <div>
+                <h2>Sent Assignments</h2>
+                <p class="empty" x-show="sentAssignments.length === 0">You have not sent any Assignments yet.</p>
+                <template x-for="assignment in sentAssignments" :key="assignment.id">
+                  <button class="item" :class="isOpen('sent', assignment.id) && 'active'"
+                          @click="openItem('sent', assignment.id)">
+                    <span x-text="assignment.title"></span><span class="chev">›</span>
+                  </button>
+                </template>
+              </div>
+            </template>
+            <h2>Account</h2>
+            <button class="item" x-show="isInstructor" :class="isOpen('send') && 'active'" @click="openItem('send')">
+              <span>Send an Assignment</span><span class="chev">›</span>
+            </button>
+            <button class="item" :class="isOpen('keys') && 'active'" @click="openItem('keys')">
+              <span>SSH keys</span><span class="chev">›</span>
+            </button>
+          </nav>
+
+          <section class="detail">
+            <button class="back" @click="open = null">‹ Back</button>
+            <p class="empty" x-show="!open">Choose something from the list.</p>
+
+            <template x-if="open?.kind === 'mine' && preview">
+              <article>
+                <h1 x-text="preview.title"></h1>
+                <div class="readme" x-show="preview.readme !== null" x-html="renderMarkdown(preview.readme)"></div>
+                <p x-show="preview.readme === null">This Assignment has no README to show.</p>
+                <p><button class="primary" @click="getRepository">Clone</button></p>
+                <template x-if="cloneCommand">
+                  <div class="clone-cmd">
+                    <input type="text" readonly aria-label="Clone command" :value="cloneCommand">
+                    <button @click="copyCloneCommand" x-text="copied ? 'Copied' : 'Copy'"></button>
+                  </div>
+                </template>
+              </article>
+            </template>
+            <p x-show="workError" role="alert" x-text="workError"></p>
+
+            <template x-if="open?.kind === 'sent' && openedAssignment">
+              <article>
+                <h1 x-text="openedAssignment.title"></h1>
+                <table>
+                  <template x-for="recipient in openedAssignment.recipients" :key="recipient.sub">
+                    <tr>
+                      <td class="num" x-text="recipient.studentNumber"></td>
+                      <td><code x-show="recipient.sshUrl" x-text="recipient.sshUrl"></code></td>
+                      <td>
+                        <button x-show="recipient.sshUrl" @click="copyText(recipient.sshUrl, recipient.sub)"
+                                x-text="copiedKey === recipient.sub ? 'Copied' : 'Copy'"></button>
+                        <span class="none" x-show="!recipient.sshUrl">no repository</span>
+                      </td>
+                    </tr>
+                  </template>
+                </table>
+              </article>
+            </template>
+            <p x-show="browseError" role="alert" x-text="browseError"></p>
+
+            <template x-if="open?.kind === 'keys'">
+              <article>
+                <h1>SSH keys</h1>
+                <form @submit.prevent="registerKey">
+                  <p>Git over SSH needs your public key to know it is you. Paste it here once and plain <code>git clone</code> works.</p>
+                  <p><label>Public key (the contents of a .pub file)<br>
+                    <textarea x-model="publicKey" required rows="4"></textarea>
+                  </label></p>
+                  <p><button class="primary" :disabled="registeringKey">Add key</button></p>
+                </form>
+                <p x-show="keyMessage" role="status" x-text="keyMessage"></p>
+                <p x-show="keyError" role="alert" x-text="keyError"></p>
+              </article>
+            </template>
+
+            <template x-if="open?.kind === 'send' && isInstructor">
+              <article>
+                <h1>Send an Assignment</h1>
+                <p>
+                  <button @click="refresh" :disabled="refreshing" x-text="refreshing ? 'Refreshing…' : 'Refresh'"></button>
+                </p>
+                <template x-if="refreshFailures.length > 0">
+                  <div role="alert">
+                    <p>Refresh could not do all of this:</p>
+                    <ul>
+                      <template x-for="failure in refreshFailures">
+                        <li x-text="[failure.classGroup, failure.person, failure.reason].filter(Boolean).join(': ')"></li>
+                      </template>
+                    </ul>
+                  </div>
+                </template>
+
+                <p x-show="classGroups.length === 0">No ClassGroups with Students to show. Click Refresh to load the ones you teach.</p>
+                <form x-show="classGroups.length > 0" @submit.prevent="send">
+                  <p><label>Title <input type="text" x-model="title" required maxlength="200"></label></p>
+                  <p><label>Public GitHub URL
+                    <input type="url" x-model="sourceUrl" required placeholder="https://github.com/owner/repository">
+                  </label></p>
+
+                  <p><label>Search by Student Number <input type="search" x-model="search"></label></p>
+                  <template x-for="classGroup in classGroups" :key="classGroup.name">
+                    <details x-show="matchingStudents(classGroup).length > 0" :open="search !== ''">
+                      <summary>
+                        <label>
+                          <input type="checkbox"
+                                 :checked="areMatchingStudentsSelected(classGroup)"
+                                 @change="selectMatchingStudents(classGroup, $event.target.checked)">
+                          <span x-text="`${classGroup.name} (${classGroup.students.length})`"></span>
+                        </label>
+                      </summary>
+                      <ul>
+                        <template x-for="student in matchingStudents(classGroup)" :key="student.sub">
+                          <li>
+                            <label>
+                              <input type="checkbox" :value="student.sub" x-model="selected">
+                              <span x-text="`${student.studentNumber} (${student.email})`"></span>
+                            </label>
+                          </li>
+                        </template>
+                      </ul>
+                    </details>
+                  </template>
+
+                  <p><button class="primary" :disabled="sendStep !== null || selected.length === 0"
+                             x-text="`Send to ${selected.length} selected`"></button></p>
+                </form>
+
+                <p x-show="sendStep === 'copying'" role="status">Copying the repository… <progress></progress></p>
+                <p x-show="sendStep === 'creating'" role="status">
+                  Repository copied. Creating StudentRepositories… <progress></progress>
+                </p>
+                <p x-show="sentMessage" role="status" x-text="sentMessage"></p>
+                <p x-show="sendError" role="alert" x-text="sendError"></p>
+                <p x-show="studentNumbersWithoutRepository.length > 0" role="alert"
+                   x-text="`No StudentRepository could be made for: ${studentNumbersWithoutRepository.join(', ')}.`"></p>
+              </article>
+            </template>
+          </section>
+        </div>
       </div>
     </template>
     <button x-show="!embedded && !me && !loading" @click="signIn">Sign in</button>

@@ -29,8 +29,6 @@ public final class TestIdentityProvider {
     /** Never fetched: nothing listens here, which proves the keys come from their own address. */
     static final String ISSUER = "https://issuer.invalid/pool";
 
-    static final String CLIENT_ID = "test-client";
-
     private final RSAKey signingKey = newKey();
     private final String jwkSetUri;
 
@@ -79,7 +77,6 @@ public final class TestIdentityProvider {
                 .subject(subject)
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plus(Duration.ofHours(1))))
-                .claim("client_id", CLIENT_ID)
                 .claim("username", "user-" + subject)
                 .claim("token_use", "access");
         changes.accept(claims);

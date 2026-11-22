@@ -14,7 +14,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Reads a message of a Student, refusing what is over the limits or not of the agreed shape. It gives
- * back the bytes as they came, because Spring forwards a message unchanged and only looks inside it.
+ * back the bytes as they came, for {@link AiClient} to put into the AI's JSON.
  */
 @Component
 class TutorMessageReader {

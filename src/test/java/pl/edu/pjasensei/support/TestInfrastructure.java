@@ -88,7 +88,6 @@ class TestInfrastructure {
         return registry -> {
             registry.add("pjasensei.identity.issuer", () -> TestIdentityProvider.ISSUER);
             registry.add("pjasensei.identity.jwk-set-uri", identityProvider::jwkSetUri);
-            registry.add("pjasensei.identity.client-id", () -> TestIdentityProvider.CLIENT_ID);
         };
     }
 

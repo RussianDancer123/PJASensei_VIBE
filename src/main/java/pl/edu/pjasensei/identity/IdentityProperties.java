@@ -17,14 +17,12 @@ import org.springframework.util.Assert;
 record IdentityProperties(
         String issuer,
         String jwkSetUri,
-        String clientId,
         String instructorGroupSuffix,
         String classGroupSuffix) {
 
     IdentityProperties {
         Assert.hasText(issuer, "pjasensei.identity.issuer must be set");
         Assert.hasText(jwkSetUri, "pjasensei.identity.jwk-set-uri must be set");
-        Assert.hasText(clientId, "pjasensei.identity.client-id must be set");
         Assert.hasText(instructorGroupSuffix, "pjasensei.identity.instructor-group-suffix must be set");
         Assert.hasText(classGroupSuffix, "pjasensei.identity.class-group-suffix must be set");
     }

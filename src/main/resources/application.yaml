@@ -22,6 +22,8 @@ pjasensei:
   gitea:
     import-timeout: 5m
   tutor:
+    # A local model takes around a minute, far longer than spring.http.clients.read-timeout.
+    read-timeout: 5m
     max-file-size: 2MB
     max-message-size: 10MB
   identity:

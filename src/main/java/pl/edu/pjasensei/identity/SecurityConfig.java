@@ -66,12 +66,11 @@ class SecurityConfig {
         var decoder = NimbusJwtDecoder.withJwkSetUri(identity.jwkSetUri())
                 .restOperations(builder.build())
                 .build();
-        // Cognito access tokens carry the client in client_id and normally have no aud.
+        // Any app client of the user pool will do: the front end and the plugin each have their own.
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(identity.issuer()),
                 // The default checks the expiry only of a token that has one.
-                new JwtClaimValidator<Instant>(JwtClaimNames.EXP, Objects::nonNull),
-                new JwtClaimValidator<String>("client_id", identity.clientId()::equals)));
+                new JwtClaimValidator<Instant>(JwtClaimNames.EXP, Objects::nonNull)));
         return decoder;
     }
 
