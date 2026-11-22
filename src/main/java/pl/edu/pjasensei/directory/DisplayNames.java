@@ -3,9 +3,7 @@ package pl.edu.pjasensei.directory;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
-import software.amazon.awssdk.core.exception.SdkException;
 
 /**
  * The name shown for a person: the part of their email before the {@code @}. It never fails, so
@@ -37,7 +35,7 @@ public class DisplayNames {
     private Optional<String> storedEmail(String sub) {
         try {
             return store.emailOf(sub);
-        } catch (DataAccessException e) {
+        } catch (RuntimeException e) {
             log.warn("Could not read the stored email of {}", sub, e);
             return Optional.empty();
         }
@@ -49,7 +47,7 @@ public class DisplayNames {
         }
         try {
             return directory.emailOf(username);
-        } catch (SdkException e) {
+        } catch (RuntimeException e) {
             log.warn("Could not read {} from the identity provider", username, e);
             return Optional.empty();
         }

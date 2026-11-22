@@ -55,7 +55,7 @@ class Refresh {
             failures.add(new Failure(null, caller.username(), UNREADABLE));
             return;
         }
-        if (!isUsable(email)) {
+        if (!Email.isUsable(email)) {
             failures.add(new Failure(null, caller.username(), NO_USABLE_EMAIL));
             return;
         }
@@ -119,7 +119,7 @@ class Refresh {
         if (store.isStudentSaved(member.sub())) {
             return true;
         }
-        if (!isUsable(member.email())) {
+        if (!Email.isUsable(member.email())) {
             failures.add(new Failure(classGroup, member.username(), NO_USABLE_EMAIL));
             return false;
         }
@@ -137,10 +137,6 @@ class Refresh {
             failures.add(new Failure(classGroup, member.username(), NOT_SAVED));
             return false;
         }
-    }
-
-    private static boolean isUsable(String email) {
-        return Email.isUsable(email);
     }
 
     record Caller(String sub, String username, List<String> taughtClassGroups) {}
