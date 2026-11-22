@@ -53,7 +53,7 @@ class CognitoDirectory {
 
         /** The local part of the email, as in s12345@mail.com. The email has to be usable. */
         String studentNumber() {
-            return email.substring(0, email.indexOf('@'));
+            return Email.localPart(email);
         }
     }
 }

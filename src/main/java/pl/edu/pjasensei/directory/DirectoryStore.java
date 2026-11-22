@@ -2,6 +2,7 @@ package pl.edu.pjasensei.directory;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -66,6 +67,19 @@ public class DirectoryStore {
                         .update();
             }
         });
+    }
+
+    /** The email saved for a Student or an Instructor with this sub. Empty for nobody saved. */
+    Optional<String> emailOf(String sub) {
+        return jdbc.sql("""
+                        SELECT email FROM students WHERE sub = :sub
+                        UNION ALL
+                        SELECT email FROM instructors WHERE sub = :sub
+                        LIMIT 1
+                        """)
+                .param("sub", sub)
+                .query(String.class)
+                .optional();
     }
 
     public List<Student> studentsOf(String classGroup) {

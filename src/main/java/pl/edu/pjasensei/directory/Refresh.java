@@ -3,7 +3,6 @@ package pl.edu.pjasensei.directory;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -26,7 +25,6 @@ class Refresh {
 
     private static final Logger log = LoggerFactory.getLogger(Refresh.class);
 
-    private static final Pattern USABLE_EMAIL = Pattern.compile("[^@\\s]+@[^@\\s]+");
     private static final String UNREADABLE = "Could not read from the identity provider.";
     private static final String NO_USABLE_EMAIL = "No usable email address.";
     private static final String NOT_SAVED = "Could not save to the database.";
@@ -142,7 +140,7 @@ class Refresh {
     }
 
     private static boolean isUsable(String email) {
-        return email != null && USABLE_EMAIL.matcher(email).matches();
+        return Email.isUsable(email);
     }
 
     record Caller(String sub, String username, List<String> taughtClassGroups) {}
