@@ -85,7 +85,7 @@
         <header class="top">
           <strong class="brand">PJASensei</strong>
           <span class="who">
-            <span x-text="me.username"></span> · <span x-text="me.roles.join(', ') || 'no role'"></span>
+            <span x-text="me.displayName || me.username"></span> · <span x-text="me.roles.join(', ') || 'no role'"></span>
             <button @click="signOut">Sign out</button>
           </span>
         </header>
