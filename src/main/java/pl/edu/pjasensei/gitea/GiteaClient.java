@@ -6,6 +6,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
@@ -36,6 +38,7 @@ public class GiteaClient {
             Pattern.compile("readme(\\.(md|markdown|txt|rst|adoc|org))?", Pattern.CASE_INSENSITIVE);
     private static final String PREFERRED_README = "README.md";
     private static final long MAX_README_BYTES = 1024 * 1024;
+    private static final int KEYS_PER_PAGE = 50;
 
     private final RestClient http;
     private final RestClient importHttp;
@@ -118,6 +121,55 @@ public class GiteaClient {
                 return KeyResult.INVALID;
             }
             return accountHasKey(account, key) ? KeyResult.ADDED : KeyResult.USED_BY_ANOTHER_ACCOUNT;
+        }
+    }
+
+    /**
+     * The SSH keys on an account, oldest first. An account that does not exist has none, and is not made.
+     *
+     * @throws RestClientException when Gitea cannot answer
+     */
+    public List<PublicKey> publicKeys(String account) {
+        var keys = new ArrayList<PublicKey>();
+        for (int page = 1; ; page++) {
+            List<PublicKey> found;
+            try {
+                found = http.get()
+                        .uri("/api/v1/users/{account}/keys?page={page}&limit={limit}", account, page, KEYS_PER_PAGE)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<>() {});
+            } catch (HttpClientErrorException.NotFound e) {
+                return List.of();
+            }
+            keys.addAll(found);
+            if (found.size() < KEYS_PER_PAGE) {
+                break;
+            }
+        }
+        keys.sort(Comparator.comparing(PublicKey::createdAt).thenComparing(PublicKey::id));
+        return keys;
+    }
+
+    /**
+     * Removes one SSH key of an account. A key of another account is left alone, as is one that does not
+     * exist.
+     *
+     * @return whether the account had that key
+     * @throws RestClientException when Gitea cannot or will not remove it
+     */
+    public boolean deletePublicKey(String account, long id) {
+        if (publicKeys(account).stream().noneMatch(key -> key.id() == id)) {
+            return false;
+        }
+        try {
+            http.delete()
+                    .uri("/api/v1/admin/users/{account}/keys/{id}", account, id)
+                    .retrieve()
+                    .toBodilessEntity();
+            return true;
+        } catch (HttpClientErrorException.NotFound e) {
+            // Removed in the meantime.
+            return false;
         }
     }
 
@@ -327,6 +379,9 @@ public class GiteaClient {
         INVALID,
         USED_BY_ANOTHER_ACCOUNT
     }
+
+    /** An SSH key as Gitea knows it, with a fingerprint in the {@code SHA256:...} form. */
+    public record PublicKey(long id, String fingerprint, @JsonProperty("created_at") OffsetDateTime createdAt) {}
 
     private record Account(String login) {}
 

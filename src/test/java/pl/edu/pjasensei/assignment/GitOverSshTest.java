@@ -147,6 +147,63 @@ class GitOverSshTest {
         assertThat(cloned.output()).contains("is not authorized to read");
     }
 
+    @Test
+    void aDeletedKeyReachesNothingWhileTheOtherKeysOfThatPersonStillWork() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(student));
+        var address = sshAddress(student, id);
+        var laptop = registeredComputerOf(student, "laptop");
+        var desktop = registeredComputerOf(student, "desktop");
+        assertThat(laptop.gitClone(address, "before").succeeded()).isTrue();
+
+        deleteKey(student, laptop);
+
+        var refused = laptop.gitClone(address, "after");
+        assertThat(refused.succeeded()).as(refused.toString()).isFalse();
+        assertThat(refused.output()).contains("Permission denied");
+        var cloned = desktop.gitClone(address, "work");
+        assertThat(cloned.succeeded()).as(cloned.toString()).isTrue();
+    }
+
+    @Test
+    void deletingTheKeyIdOfAnotherPersonLeavesThatKeyWorking() {
+        var taught = classroom.newTaughtClassGroup(2);
+        var owner = taught.students().get(0);
+        var other = taught.students().get(1);
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(owner));
+        var ownersComputer = registeredComputerOf(owner);
+        registeredComputerOf(other);
+
+        http.delete().uri("/api/ssh-keys/{id}", keyIdOf(owner, ownersComputer))
+                .header("Authorization", "Bearer " + other.token())
+                .exchange()
+                .expectStatus().isNotFound();
+
+        var cloned = ownersComputer.gitClone(sshAddress(owner, id), "work");
+        assertThat(cloned.succeeded()).as(cloned.toString()).isTrue();
+    }
+
+    private void deleteKey(Person person, GitUser computer) {
+        http.delete().uri("/api/ssh-keys/{id}", keyIdOf(person, computer))
+                .header("Authorization", "Bearer " + person.token())
+                .exchange()
+                .expectStatus().isNoContent();
+    }
+
+    private long keyIdOf(Person person, GitUser computer) {
+        List<Number> ids = JsonPath.read(
+                http.get().uri("/api/ssh-keys")
+                        .header("Authorization", "Bearer " + person.token())
+                        .exchange()
+                        .expectStatus().isOk()
+                        .expectBody(String.class).returnResult().getResponseBody(),
+                "$[?(@.fingerprint == '%s')].id".formatted(computer.fingerprint()));
+        return ids.getFirst().longValue();
+    }
+
     private String instructorSshAddress(Person instructor, int assignment, Person student) {
         List<String> addresses = JsonPath.read(
                 http.get().uri("/api/assignments/{id}", assignment)
@@ -169,7 +226,11 @@ class GitOverSshTest {
     }
 
     private GitUser registeredComputerOf(Person person) {
-        var computer = computerOf(person);
+        return registeredComputerOf(person, person.sub());
+    }
+
+    private GitUser registeredComputerOf(Person person, String name) {
+        var computer = computerOf(name);
         http.post().uri("/api/ssh-keys")
                 .header("Authorization", "Bearer " + person.token())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -180,8 +241,12 @@ class GitOverSshTest {
     }
 
     private GitUser computerOf(Person person) {
+        return computerOf(person.sub());
+    }
+
+    private GitUser computerOf(String name) {
         try {
-            return gitea.newGitUser(Files.createDirectory(computers.resolve(person.sub())));
+            return gitea.newGitUser(Files.createDirectory(computers.resolve(name)));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

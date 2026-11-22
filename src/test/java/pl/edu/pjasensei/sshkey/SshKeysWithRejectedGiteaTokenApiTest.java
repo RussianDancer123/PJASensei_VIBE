@@ -28,6 +28,36 @@ class SshKeysWithRejectedGiteaTokenApiTest {
 
     @Test
     void saysSoWhenGiteaCannotTakeTheKey() {
+        var token = savedInstructor();
+
+        http.post().uri("/api/ssh-keys")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("publicKey", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ8WkzR8bZ0tq8m5fXvJ2Y7f0m6u3hTqYwTqvC1oN2pL"))
+                .exchange()
+                .expectStatus().isEqualTo(502)
+                .expectBody().jsonPath("$.detail").isNotEmpty();
+    }
+
+    @Test
+    void saysSoWhenGiteaCannotListTheKeys() {
+        http.get().uri("/api/ssh-keys")
+                .header("Authorization", "Bearer " + savedInstructor())
+                .exchange()
+                .expectStatus().isEqualTo(502)
+                .expectBody().jsonPath("$.detail").isNotEmpty();
+    }
+
+    @Test
+    void saysSoWhenGiteaCannotDeleteAKey() {
+        http.delete().uri("/api/ssh-keys/1")
+                .header("Authorization", "Bearer " + savedInstructor())
+                .exchange()
+                .expectStatus().isEqualTo(502)
+                .expectBody().jsonPath("$.detail").isNotEmpty();
+    }
+
+    private String savedInstructor() {
         var sub = UUID.randomUUID().toString();
         var username = "instructor-" + sub;
         cognito.addUser(new Member(username, sub, username + "@mail.com"));
@@ -38,13 +68,6 @@ class SshKeysWithRejectedGiteaTokenApiTest {
         // Saves the Instructor, though it cannot make their account.
         http.post().uri("/api/refresh").header("Authorization", "Bearer " + token).exchange()
                 .expectStatus().isOk();
-
-        http.post().uri("/api/ssh-keys")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of("publicKey", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ8WkzR8bZ0tq8m5fXvJ2Y7f0m6u3hTqYwTqvC1oN2pL"))
-                .exchange()
-                .expectStatus().isEqualTo(502)
-                .expectBody().jsonPath("$.detail").isNotEmpty();
+        return token;
     }
 }

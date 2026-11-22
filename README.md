@@ -85,6 +85,8 @@ An Instructor's own routes need the Instructor role, and an Assignment sent by s
 
 Anyone in the database can add SSH public keys, on the front end or with `POST /api/ssh-keys` and `{ "publicKey" }`. A person may have several. A key goes on their own technical Gitea account, which is made if missing. Adding the same key again changes nothing, so a plugin can do it at every start. A key must be one line, as in a `.pub` file. Anything else, or an invalid key, is refused with a 400, and a key already registered to someone else with a 409.
 
+`GET /api/ssh-keys` gives the caller's own keys, oldest first, as `[{ "id", "fingerprint", "createdAt" }]` with the fingerprint in the `SHA256:...` form. It makes no technical account, so someone without one gets `[]`. `DELETE /api/ssh-keys/{id}` removes one of them with a 204, after which `git` over SSH with that key is refused. A key that is not the caller's, or does not exist, gives a 404. The last key may be removed too, and a removed key can be added again. When Gitea fails, all three answer with a 502.
+
 A Student's own routes need the Student role, and an Assignment without a StudentRepository of theirs answers with a 404:
 
 | Route                                         | Answer                                                                          |

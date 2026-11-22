@@ -18,6 +18,7 @@ public final class GitUser {
 
     private final Path home;
     private final String publicKey;
+    private final String fingerprint;
     private final String sshCommand;
 
     GitUser(Path home, String gitHost, int gitPort) {
@@ -30,6 +31,12 @@ public final class GitUser {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+        // As ssh-keygen prints it, for example "256 SHA256:abc... git-user (ED25519)".
+        fingerprint = run(home, List.of("ssh-keygen", "-l", "-E", "sha256", "-f", privateKey + ".pub"))
+                .orThrow()
+                .output()
+                .strip()
+                .split(" ")[1];
         // Git runs this through a shell, which would swallow Windows backslashes.
         sshCommand = ("ssh -F /dev/null -p %d -i '%s' -o HostName=%s -o IdentitiesOnly=yes -o BatchMode=yes"
                         + " -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null")
@@ -38,6 +45,11 @@ public final class GitUser {
 
     public String publicKey() {
         return publicKey;
+    }
+
+    /** The key's {@code SHA256:...} fingerprint, as ssh-keygen gives it. */
+    public String fingerprint() {
+        return fingerprint;
     }
 
     /** Clones into a new directory of this person's computer. */

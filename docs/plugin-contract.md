@@ -46,6 +46,10 @@ The front end learns `FRAME_ANCESTORS` from `/config.json`, written by Caddy.
 Sent with `Authorization: Bearer <accessToken>`:
 
 - `POST /api/ssh-keys` with `{ "publicKey" }` registers the SSH public key of the IDE. Adding the same key again changes nothing, so a plugin can do it at every start. See [Student work](../README.md#student-work) in the README for the answers.
+- `GET /api/ssh-keys` lists the caller's own keys, oldest first, as `[{ "id", "fingerprint", "createdAt" }]`, with the fingerprint in the `SHA256:...` form.
+- `DELETE /api/ssh-keys/{id}` removes one of them (204). Another person's key, or one that does not exist, gives a 404.
+
+A plugin which registers its key at every start puts a deleted key back at the next start. This is intended: removing a key in the browser stops it only until that IDE starts the plugin again, so to stop it for good, remove it from the IDE as well.
 
 A Student or Instructor Refresh has not added yet gets a 403 here, as everywhere else.
 
