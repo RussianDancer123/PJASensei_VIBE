@@ -141,10 +141,11 @@ public class GiteaClient {
             } catch (HttpClientErrorException.NotFound e) {
                 return List.of();
             }
-            keys.addAll(found);
-            if (found.size() < KEYS_PER_PAGE) {
+            // Gitea may give fewer than asked for on every page, so only an empty one says the list is over.
+            if (found.isEmpty()) {
                 break;
             }
+            keys.addAll(found);
         }
         keys.sort(Comparator.comparing(PublicKey::createdAt).thenComparing(PublicKey::id));
         return keys;
