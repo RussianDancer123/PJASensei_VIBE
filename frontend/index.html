@@ -168,6 +168,16 @@
             <template x-if="open?.kind === 'keys'">
               <article>
                 <h1>SSH keys</h1>
+                <p class="empty" x-show="keys.length === 0">You have no SSH keys yet.</p>
+                <table x-show="keys.length > 0">
+                  <template x-for="key in keys" :key="key.id">
+                    <tr>
+                      <td><code x-text="key.fingerprint"></code></td>
+                      <td x-text="`Added ${formatDate(key.createdAt)}`"></td>
+                      <td><button @click="deleteKey(key)">Delete</button></td>
+                    </tr>
+                  </template>
+                </table>
                 <form @submit.prevent="registerKey">
                   <p>Git over SSH needs your public key to know it is you. Paste it here once and plain <code>git clone</code> works.</p>
                   <p><label>Public key (the contents of a .pub file)<br>

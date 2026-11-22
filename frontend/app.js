@@ -52,6 +52,7 @@ document.addEventListener("alpine:init", () => {
     registeringKey: false,
     keyMessage: null,
     keyError: null,
+    keys: [],
 
     get isInstructor() {
       return this.me?.roles.includes("INSTRUCTOR");
@@ -93,7 +94,11 @@ document.addEventListener("alpine:init", () => {
       this.copiedKey = null;
       this.workError = null;
       this.browseError = null;
-      if (kind === "mine") {
+      this.keyMessage = null;
+      this.keyError = null;
+      if (kind === "keys") {
+        this.loadKeys();
+      } else if (kind === "mine") {
         this.openPreview(id);
       } else if (kind === "sent") {
         this.openSentAssignment(id);
@@ -175,6 +180,41 @@ document.addEventListener("alpine:init", () => {
       }
     },
 
+    // A failure here shows in the SSH keys section only; the rest of the page stays as it is.
+    async loadKeys() {
+      try {
+        const response = await callApi("/api/ssh-keys");
+        if (!response.ok) {
+          throw new Error(await reasonFrom(response));
+        }
+        this.keys = await response.json();
+      } catch (error) {
+        this.keyError = error.message;
+      }
+    },
+
+    async deleteKey(key) {
+      if (!confirm(`Delete key ${key.fingerprint}? Git over SSH from the computer that uses this key will stop working.`)) {
+        return;
+      }
+      this.keyError = null;
+      this.keyMessage = null;
+      try {
+        const response = await callApi(`/api/ssh-keys/${key.id}`, { method: "DELETE" });
+        if (!response.ok) {
+          throw new Error(await reasonFrom(response));
+        }
+        this.keyMessage = "Key deleted.";
+      } catch (error) {
+        this.keyError = error.message;
+      }
+      await this.loadKeys();
+    },
+
+    formatDate(iso) {
+      return new Date(iso).toLocaleDateString();
+    },
+
     async registerKey() {
       this.keyError = null;
       this.keyMessage = null;
@@ -190,6 +230,7 @@ document.addEventListener("alpine:init", () => {
         }
         this.publicKey = "";
         this.keyMessage = "Key added.";
+        await this.loadKeys();
       } catch (error) {
         this.keyError = error.message;
       } finally {
@@ -368,6 +409,7 @@ document.addEventListener("alpine:init", () => {
       this.publicKey = "";
       this.keyMessage = null;
       this.keyError = null;
+      this.keys = [];
     },
 
     async refresh() {
