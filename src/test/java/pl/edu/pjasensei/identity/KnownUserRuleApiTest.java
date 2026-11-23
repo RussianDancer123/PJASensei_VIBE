@@ -34,7 +34,7 @@ class KnownUserRuleApiTest {
 
     @Test
     void aMissingUserHoldingARoleIsStillRefused() {
-        var token = identityProvider.token(claims -> claims.claim("cognito:groups", List.of("17w", "17c")));
+        var token = identityProvider.token(claims -> claims.claim("cognito:groups", List.of("17p", "17c")));
 
         getWith(token).expectStatus().isForbidden();
     }

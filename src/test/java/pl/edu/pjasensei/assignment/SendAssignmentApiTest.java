@@ -159,7 +159,7 @@ class SendAssignmentApiTest {
         var inSecond = newStudent();
         cognito.setGroup(first + "c", List.of(inBoth));
         cognito.setGroup(second + "c", List.of(inBoth, inSecond));
-        var instructor = newInstructor(first + "w", second + "w");
+        var instructor = newInstructor(first + "p", second + "p");
 
         var id = sent(
                 instructor,
@@ -257,7 +257,7 @@ class SendAssignmentApiTest {
         var studentToken = identityProvider.token(claims -> claims
                 .subject(student.sub())
                 .claim("cognito:groups", List.of(taught.classGroup())));
-        var unknownInstructorToken = identityProvider.token(claims -> claims.claim("cognito:groups", List.of("17w")));
+        var unknownInstructorToken = identityProvider.token(claims -> claims.claim("cognito:groups", List.of("17p")));
         for (var token : List.of(studentToken, unknownInstructorToken)) {
             createWith(token, request(url, taught.studentSubs())).expectStatus().isForbidden();
             repositoriesWith(token, id).expectStatus().isForbidden();
@@ -273,7 +273,7 @@ class SendAssignmentApiTest {
         var student = taught.students().getFirst();
         var token = identityProvider.token(claims -> claims
                 .subject(student.sub())
-                .claim("cognito:groups", List.of(taught.classGroup().replace("c", "w"))));
+                .claim("cognito:groups", List.of(taught.classGroup().replace("c", "p"))));
         var url = gitea.newSourceRepository().url();
 
         createWith(token, request(url, taught.studentSubs())).expectStatus().isForbidden();
@@ -287,7 +287,7 @@ class SendAssignmentApiTest {
         var student = taught.students().getFirst();
         var id = created(taught.instructor(), request(gitea.newSourceRepository().url(), taught.studentSubs()));
         // Teaches the same ClassGroup, and still did not send this Assignment.
-        var colleague = newInstructor(taught.classGroup().replace("c", "w"));
+        var colleague = newInstructor(taught.classGroup().replace("c", "p"));
 
         repositoriesWith(colleague.token(), id).expectStatus().isNotFound();
         repositoriesWith(colleague.token(), Integer.MAX_VALUE).expectStatus().isNotFound();
@@ -490,7 +490,7 @@ class SendAssignmentApiTest {
         var upper = new Member("S" + number, UUID.randomUUID().toString(), "S" + number + "@mail.com");
         int group = cognito.newGroupNumber();
         cognito.setGroup(group + "c", List.of(lower, upper));
-        var instructor = newInstructor(group + "w");
+        var instructor = newInstructor(group + "p");
         var id = created(instructor, request(gitea.newSourceRepository().url(), List.of(lower.sub(), upper.sub())));
 
         String failed = JsonPath.read(
@@ -645,7 +645,7 @@ class SendAssignmentApiTest {
         int number = cognito.newGroupNumber();
         var members = Stream.generate(SendAssignmentApiTest::newStudent).limit(students).toList();
         cognito.setGroup(number + "c", members);
-        return new TaughtClassGroup(number + "c", newInstructor(number + "w"), members);
+        return new TaughtClassGroup(number + "c", newInstructor(number + "p"), members);
     }
 
     private Instructor newInstructor(String... groups) {

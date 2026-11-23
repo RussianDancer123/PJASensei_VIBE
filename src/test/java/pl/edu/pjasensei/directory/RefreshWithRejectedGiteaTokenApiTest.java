@@ -36,7 +36,7 @@ class RefreshWithRejectedGiteaTokenApiTest {
         var token = identityProvider.token(claims -> claims
                 .subject(sub)
                 .claim("username", username)
-                .claim("cognito:groups", List.of(number + "w")));
+                .claim("cognito:groups", List.of(number + "p")));
 
         http.post().uri("/api/refresh").header("Authorization", "Bearer " + token).exchange()
                 .expectStatus().isOk()

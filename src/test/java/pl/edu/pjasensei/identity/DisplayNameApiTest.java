@@ -46,7 +46,7 @@ class DisplayNameApiTest {
         var sub = newSub();
         saveInstructor(sub, "jan.kowalski@mail.com");
 
-        displayNameOf(token(sub, "opaque-" + sub, "17w")).isEqualTo("jan.kowalski");
+        displayNameOf(token(sub, "opaque-" + sub, "17p")).isEqualTo("jan.kowalski");
     }
 
     @Test
@@ -55,7 +55,7 @@ class DisplayNameApiTest {
         saveStudent(sub, "ewa.kowalska@mail.com", "s" + sub);
         saveInstructor(sub, "ewa.kowalska@mail.com");
 
-        displayNameOf(token(sub, "opaque-" + sub, "17c", "17w")).isEqualTo("ewa.kowalska");
+        displayNameOf(token(sub, "opaque-" + sub, "17c", "17p")).isEqualTo("ewa.kowalska");
     }
 
     @Test
@@ -65,7 +65,7 @@ class DisplayNameApiTest {
         saveInstructor(sub, "old.name@mail.com");
         cognito.addUser(new Member(username, sub, "new.name@mail.com"));
 
-        displayNameOf(token(sub, username, "17w")).isEqualTo("old.name");
+        displayNameOf(token(sub, username, "17p")).isEqualTo("old.name");
     }
 
     @Test
@@ -74,7 +74,7 @@ class DisplayNameApiTest {
         var username = "opaque-" + sub;
         cognito.addUser(new Member(username, sub, "piotr.zielinski@mail.com"));
 
-        displayNameOf(token(sub, username, "17w")).isEqualTo("piotr.zielinski");
+        displayNameOf(token(sub, username, "17p")).isEqualTo("piotr.zielinski");
     }
 
     @Test
@@ -82,7 +82,7 @@ class DisplayNameApiTest {
         var sub = newSub();
         var username = "unknown-to-the-identity-provider-" + sub;
 
-        displayNameOf(token(sub, username, "17w")).isEqualTo(username);
+        displayNameOf(token(sub, username, "17p")).isEqualTo(username);
     }
 
     @ParameterizedTest
@@ -93,7 +93,7 @@ class DisplayNameApiTest {
         var username = "opaque-" + sub;
         cognito.addUser(new Member(username, sub, email));
 
-        displayNameOf(token(sub, username, "17w")).isEqualTo(username);
+        displayNameOf(token(sub, username, "17p")).isEqualTo(username);
     }
 
     @Test
@@ -110,7 +110,7 @@ class DisplayNameApiTest {
         var sub = newSub();
         saveInstructor(sub, "jan.kowalski@mail.com");
 
-        http.get().uri("/api/me").header("Authorization", "Bearer " + token(sub, "the-username", "17w")).exchange()
+        http.get().uri("/api/me").header("Authorization", "Bearer " + token(sub, "the-username", "17p")).exchange()
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.sub").isEqualTo(sub)
@@ -124,7 +124,7 @@ class DisplayNameApiTest {
         var username = "opaque-" + sub;
         cognito.addUser(new Member(username, sub, "piotr.zielinski@mail.com"));
 
-        displayNameOf(token(sub, username, "17w")).isEqualTo("piotr.zielinski");
+        displayNameOf(token(sub, username, "17p")).isEqualTo("piotr.zielinski");
 
         var rows = jdbc.sql("""
                         SELECT (SELECT count(*) FROM students WHERE sub = :sub)

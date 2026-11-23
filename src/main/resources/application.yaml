@@ -27,6 +27,6 @@ pjasensei:
     max-file-size: 2MB
     max-message-size: 10MB
   identity:
-    # A number plus one of these: 17w gives Instructor and 17c gives Student.
-    instructor-group-suffix: w
+    # A number plus one of these: 17p gives Instructor and 17c gives Student.
+    instructor-group-suffix: p
     class-group-suffix: c

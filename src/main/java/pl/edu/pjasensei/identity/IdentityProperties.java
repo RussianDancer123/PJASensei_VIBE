@@ -10,7 +10,7 @@ import org.springframework.util.Assert;
  * the mock's public address does not resolve inside the Compose network. With real Cognito both are
  * the same public address.
  *
- * <p>A group that gives a role is a number plus a suffix: Instructors of {@code 17w} teach the
+ * <p>A group that gives a role is a number plus a suffix: Instructors of {@code 17p} teach the
  * ClassGroup {@code 17c}, the one with the same number. Any other group is ignored.
  */
 @ConfigurationProperties("pjasensei.identity")

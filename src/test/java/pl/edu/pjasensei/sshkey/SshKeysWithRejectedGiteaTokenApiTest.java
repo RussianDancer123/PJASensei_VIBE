@@ -64,7 +64,7 @@ class SshKeysWithRejectedGiteaTokenApiTest {
         var token = identityProvider.token(claims -> claims
                 .subject(sub)
                 .claim("username", username)
-                .claim("cognito:groups", List.of(cognito.newGroupNumber() + "w")));
+                .claim("cognito:groups", List.of(cognito.newGroupNumber() + "p")));
         // Saves the Instructor, though it cannot make their account.
         http.post().uri("/api/refresh").header("Authorization", "Bearer " + token).exchange()
                 .expectStatus().isOk();

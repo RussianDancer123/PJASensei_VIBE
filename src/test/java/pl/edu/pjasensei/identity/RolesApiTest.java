@@ -18,7 +18,7 @@ class RolesApiTest {
 
     @Test
     void anInstructorGroupGivesInstructor() {
-        rolesOf(List.of("17w")).jsonPath("$.roles").isEqualTo(List.of("INSTRUCTOR"));
+        rolesOf(List.of("17p")).jsonPath("$.roles").isEqualTo(List.of("INSTRUCTOR"));
     }
 
     @Test
@@ -28,12 +28,12 @@ class RolesApiTest {
 
     @Test
     void oneOfEachGivesBothRoles() {
-        rolesOf(List.of("18c", "17w")).jsonPath("$.roles").isEqualTo(List.of("INSTRUCTOR", "STUDENT"));
+        rolesOf(List.of("18c", "17p")).jsonPath("$.roles").isEqualTo(List.of("INSTRUCTOR", "STUDENT"));
     }
 
     @Test
     void otherGroupsAreIgnored() {
-        rolesOf(List.of("eu-central-1_abc123_Google", "17", "w", "17x", "x17w", "17wc", "17W"))
+        rolesOf(List.of("eu-central-1_abc123_Google", "17", "w", "17x", "x17p", "17pc", "17P"))
                 .jsonPath("$.roles").isEmpty();
     }
 

@@ -36,14 +36,14 @@ The **Sign in** button on the front end goes to the identity provider's own page
 
 | Username                                 | Groups                     | Roles                |
 | ---------------------------------------- | -------------------------- | -------------------- |
-| `jkowalski`                              | `17w`                      | Instructor           |
-| `anowak`                                 | `18w`, `19w`               | Instructor           |
+| `jkowalski`                              | `17p`                      | Instructor           |
+| `anowak`                                 | `18p`, `19p`               | Instructor           |
 | `s17001`, `s17002`                       | `17c`                      | Student              |
 | `s18001`                                 | `18c`                      | Student              |
 | `s18002`                                 | `18c`, a provider group    | Student              |
 | `s18003` (no email)                      | `18c`                      | Student              |
 | `s19001`                                 | `19c`                      | Student              |
-| `s20001`                                 | `20w`, `17c`               | Instructor, Student  |
+| `s20001`                                 | `20p`, `17c`               | Instructor, Student  |
 | `outsider`                               | a provider group           | none                 |
 | `nogroups`                               | none                       | none                 |
 
@@ -53,7 +53,7 @@ Spring accepts any token the configured provider signed for the configured clien
 
 ## Refresh
 
-An Instructor's **Refresh** button (`POST /api/refresh`) is the only thing that pulls data from the identity provider. It needs a valid token with an Instructor group, not a row in the database, and it adds the caller to the database. For each Instructor group in the token, such as `17w`, it reads the paired ClassGroup, `17c`, and replaces that ClassGroup's members, then makes any missing technical Gitea account. The response lists everything that failed, in `failures`, and everything else is kept. `GET /api/class-groups` then shows the ClassGroups the caller teaches, leaving out any with no members.
+An Instructor's **Refresh** button (`POST /api/refresh`) is the only thing that pulls data from the identity provider. It needs a valid token with an Instructor group, not a row in the database, and it adds the caller to the database. For each Instructor group in the token, such as `17p`, it reads the paired ClassGroup, `17c`, and replaces that ClassGroup's members, then makes any missing technical Gitea account. The response lists everything that failed, in `failures`, and everything else is kept. `GET /api/class-groups` then shows the ClassGroups the caller teaches, leaving out any with no members.
 
 A saved Student never changes: Refresh only adds new Students and changes memberships. Their email and Student Number stay even if the identity provider now gives something different or unusable, with no failure listed, and a Student who leaves every ClassGroup stays in the database. Only a person not yet saved is skipped and listed for having no usable email. A ClassGroup that could not be read keeps its previous members.
 

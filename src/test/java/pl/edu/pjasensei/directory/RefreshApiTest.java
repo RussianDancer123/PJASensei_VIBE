@@ -50,7 +50,7 @@ class RefreshApiTest {
         var username = "instructor-" + sub;
         cognito.addUser(new Member(username, sub, "jan.kowalski@mail.com"));
 
-        var token = instructorToken(sub, username, number + "w");
+        var token = instructorToken(sub, username, number + "p");
 
         refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
 
@@ -64,7 +64,7 @@ class RefreshApiTest {
         var first = newStudent();
         var second = newStudent();
         cognito.setGroup(number + "c", List.of(first, second));
-        var token = instructorOf(number + "w");
+        var token = instructorOf(number + "p");
 
         refreshWith(token).expectStatus().isOk();
 
@@ -85,9 +85,9 @@ class RefreshApiTest {
         var taughtStudent = newStudent();
         cognito.setGroup(taught + "c", List.of(taughtStudent));
         cognito.setGroup(other + "c", List.of(outsider));
-        refreshWith(instructorOf(other + "w")).expectStatus().isOk();
+        refreshWith(instructorOf(other + "p")).expectStatus().isOk();
         int timesOtherWasRead = Collections.frequency(cognito.requestedGroups(), other + "c");
-        var token = instructorOf(taught + "w");
+        var token = instructorOf(taught + "p");
 
         refreshWith(token).expectStatus().isOk();
 
@@ -105,7 +105,7 @@ class RefreshApiTest {
         var second = newStudent();
         var third = newStudent();
         cognito.setGroup(number + "c", List.of(first), List.of(second), List.of(third));
-        var token = instructorOf(number + "w");
+        var token = instructorOf(number + "p");
 
         refreshWith(token).expectStatus().isOk();
 
@@ -121,8 +121,8 @@ class RefreshApiTest {
         var stayer = newStudent();
         cognito.setGroup(number + "c", List.of(leaver, stayer));
         cognito.setGroup(other + "c", List.of(leaver));
-        var token = instructorOf(number + "w");
-        var otherToken = instructorOf(other + "w");
+        var token = instructorOf(number + "p");
+        var otherToken = instructorOf(other + "p");
         refreshWith(token).expectStatus().isOk();
         refreshWith(otherToken).expectStatus().isOk();
 
@@ -142,13 +142,13 @@ class RefreshApiTest {
 
     @Test
     void classGroupsAreForInstructorsTheDatabaseKnows() {
-        classGroupsWith(identityProvider.token(claims -> claims.claim("cognito:groups", List.of("17w"))))
+        classGroupsWith(identityProvider.token(claims -> claims.claim("cognito:groups", List.of("17p"))))
                 .expectStatus().isForbidden();
 
         int number = cognito.newGroupNumber();
         var student = newStudent();
         cognito.setGroup(number + "c", List.of(student));
-        refreshWith(instructorOf(number + "w")).expectStatus().isOk();
+        refreshWith(instructorOf(number + "p")).expectStatus().isOk();
         classGroupsWith(identityProvider.token(claims -> claims
                         .subject(student.sub())
                         .claim("cognito:groups", List.of(number + "c"))))
@@ -165,7 +165,7 @@ class RefreshApiTest {
         var other = newStudent();
         cognito.setGroup(failing + "c", List.of(previous));
         cognito.setGroup(working + "c", List.of());
-        var token = instructorOf(failing + "w", working + "w");
+        var token = instructorOf(failing + "p", working + "p");
         refreshWith(token).expectStatus().isOk();
 
         cognito.setGroup(failing + "c", List.of(joinedOnFirstPage), List.of(joinedOnSecondPage));
@@ -185,7 +185,7 @@ class RefreshApiTest {
     @Test
     void aClassGroupTheIdentityProviderDoesNotHaveIsListed() {
         int number = cognito.newGroupNumber();
-        var token = instructorOf(number + "w");
+        var token = instructorOf(number + "p");
 
         refreshWith(token).expectStatus().isOk().expectBody()
                 .jsonPath("$.failures[0].classGroup").isEqualTo(number + "c");
@@ -201,7 +201,7 @@ class RefreshApiTest {
         var good = newStudent();
         var bad = new Member("bad-" + UUID.randomUUID(), UUID.randomUUID().toString(), email);
         cognito.setGroup(number + "c", List.of(bad, good));
-        var token = instructorOf(number + "w");
+        var token = instructorOf(number + "p");
 
         refreshWith(token).expectStatus().isOk().expectBody()
                 .jsonPath("$.failures.length()").isEqualTo(1)
@@ -220,7 +220,7 @@ class RefreshApiTest {
                 "clash-" + UUID.randomUUID(), UUID.randomUUID().toString(), holder.username() + "@other.com");
         var other = newStudent();
         cognito.setGroup(number + "c", List.of(holder, clashing, other));
-        var token = instructorOf(number + "w");
+        var token = instructorOf(number + "p");
 
         refreshWith(token).expectStatus().isOk().expectBody()
                 .jsonPath("$.failures.length()").isEqualTo(1)
@@ -234,7 +234,7 @@ class RefreshApiTest {
         int number = cognito.newGroupNumber();
         var student = newStudent();
         cognito.setGroup(number + "c", List.of(student));
-        var token = instructorRefreshed(number + "w");
+        var token = instructorRefreshed(number + "p");
 
         cognito.setGroup(number + "c", List.of(withEmail(student, "changed-" + UUID.randomUUID() + "@other.com")));
 
@@ -249,7 +249,7 @@ class RefreshApiTest {
         int number = cognito.newGroupNumber();
         var student = newStudent();
         cognito.setGroup(number + "c", List.of(student));
-        var token = instructorRefreshed(number + "w");
+        var token = instructorRefreshed(number + "p");
 
         cognito.setGroup(number + "c", List.of(withEmail(student, email)));
 
@@ -263,7 +263,7 @@ class RefreshApiTest {
         var holder = newStudent();
         var student = newStudent();
         cognito.setGroup(number + "c", List.of(holder, student));
-        var token = instructorRefreshed(number + "w");
+        var token = instructorRefreshed(number + "p");
 
         cognito.setGroup(number + "c", List.of(holder, withEmail(student, holder.username() + "@other.com")));
 
@@ -278,7 +278,7 @@ class RefreshApiTest {
         var student = newStudent();
         var other = newStudent();
         cognito.setGroup(number + "c", List.of(student, other));
-        var token = instructorRefreshed(number + "w");
+        var token = instructorRefreshed(number + "p");
 
         cognito.setGroup(number + "c", List.of(other));
         refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
@@ -295,7 +295,7 @@ class RefreshApiTest {
         int number = cognito.newGroupNumber();
         var student = newStudent();
         cognito.setGroup(number + "c", List.of(student));
-        var token = instructorRefreshed(number + "w");
+        var token = instructorRefreshed(number + "p");
         gitea.deleteAccount(student.sub());
 
         cognito.setGroup(number + "c", List.of(withEmail(student, null)));
@@ -311,7 +311,7 @@ class RefreshApiTest {
         var sub = UUID.randomUUID().toString();
         var username = "instructor-" + sub;
         cognito.addUser(new Member(username, sub, username + "@mail.com"));
-        var token = instructorToken(sub, username, number + "w");
+        var token = instructorToken(sub, username, number + "p");
         refreshWith(token).expectStatus().isOk();
 
         cognito.addUser(new Member(username, sub, "changed-" + username + "@mail.com"));
@@ -329,7 +329,7 @@ class RefreshApiTest {
         var stayer = newStudent();
         cognito.setGroup(emptied + "c", List.of(leaver));
         cognito.setGroup(other + "c", List.of(stayer));
-        var token = instructorRefreshed(emptied + "w", other + "w");
+        var token = instructorRefreshed(emptied + "p", other + "p");
 
         cognito.setGroup(emptied + "c");
 
@@ -343,7 +343,7 @@ class RefreshApiTest {
     void aClassGroupThatNeverHadMembersDoesNotAppear() {
         int number = cognito.newGroupNumber();
         cognito.setGroup(number + "c");
-        var token = instructorRefreshed(number + "w");
+        var token = instructorRefreshed(number + "p");
 
         classGroupsWith(token).expectStatus().isOk().expectBody().jsonPath("$.classGroups").isEmpty();
     }
@@ -356,8 +356,8 @@ class RefreshApiTest {
         cognito.setGroup(emptied + "c", List.of(student));
         cognito.setGroup(kept + "c", List.of(student));
         // Separate Instructors, so that refreshing the emptied ClassGroup does not also restore the other.
-        var emptiedToken = instructorRefreshed(emptied + "w");
-        var keptToken = instructorRefreshed(kept + "w");
+        var emptiedToken = instructorRefreshed(emptied + "p");
+        var keptToken = instructorRefreshed(kept + "p");
 
         cognito.setGroup(emptied + "c");
         refreshWith(emptiedToken).expectStatus().isOk();
@@ -374,7 +374,7 @@ class RefreshApiTest {
         var sub = UUID.randomUUID().toString();
         var username = "instructor-" + sub;
         cognito.addUser(new Member(username, sub, null));
-        var token = instructorToken(sub, username, number + "w");
+        var token = instructorToken(sub, username, number + "p");
 
         refreshWith(token).expectStatus().isOk().expectBody()
                 .jsonPath("$.failures.length()").isEqualTo(1)
@@ -383,7 +383,7 @@ class RefreshApiTest {
 
         // Not added, so the rule for people missing from the database still applies to them.
         classGroupsWith(token).expectStatus().isForbidden();
-        assertThat(studentNumbersIn(instructorRefreshed(number + "w"), 0)).containsExactly(student.username());
+        assertThat(studentNumbersIn(instructorRefreshed(number + "p"), 0)).containsExactly(student.username());
     }
 
     @Test
@@ -393,7 +393,7 @@ class RefreshApiTest {
         var username = "unknown-" + UUID.randomUUID();
         var token = identityProvider.token(claims -> claims
                 .claim("username", username)
-                .claim("cognito:groups", List.of(number + "w")));
+                .claim("cognito:groups", List.of(number + "p")));
 
         refreshWith(token).expectStatus().isOk().expectBody()
                 .jsonPath("$.failures[0].person").isEqualTo(username);
@@ -407,7 +407,7 @@ class RefreshApiTest {
         var instructorSub = UUID.randomUUID().toString();
         var username = "instructor-" + instructorSub;
         cognito.addUser(new Member(username, instructorSub, username + "@mail.com"));
-        var token = instructorToken(instructorSub, username, number + "w");
+        var token = instructorToken(instructorSub, username, number + "p");
 
         refreshWith(token).expectStatus().isOk().expectBody().jsonPath("$.failures").isEmpty();
 
@@ -421,7 +421,7 @@ class RefreshApiTest {
         var kept = newStudent();
         var lost = newStudent();
         cognito.setGroup(number + "c", List.of(kept, lost));
-        var token = instructorOf(number + "w");
+        var token = instructorOf(number + "p");
         refreshWith(token).expectBody().jsonPath("$.failures").isEmpty();
 
         gitea.deleteAccount(lost.sub());
@@ -437,7 +437,7 @@ class RefreshApiTest {
         var refused = new Member("refused-" + UUID.randomUUID(), "not a name Gitea accepts", "s" + number + "@mail.com");
         var other = newStudent();
         cognito.setGroup(number + "c", List.of(refused, other));
-        var token = instructorOf(number + "w");
+        var token = instructorOf(number + "p");
 
         refreshWith(token).expectStatus().isOk().expectBody()
                 .jsonPath("$.failures.length()").isEqualTo(1)
@@ -455,7 +455,7 @@ class RefreshApiTest {
         var rejected = newStudent();
         var kept = newStudent();
         cognito.setGroup(number + "c", List.of(noEmail, rejected, kept));
-        var token = instructorOf(number + "w");
+        var token = instructorOf(number + "p");
 
         whileDatabaseRejects("students", "sub <> '%s'".formatted(rejected.sub()), () ->
                 refreshWith(token).expectStatus().isOk().expectBody()
@@ -469,7 +469,7 @@ class RefreshApiTest {
         int rejected = cognito.newGroupNumber();
         int other = cognito.newGroupNumber();
         var previous = newStudent();
-        var token = instructorOf(rejected + "w", other + "w");
+        var token = instructorOf(rejected + "p", other + "p");
         cognito.setGroup(rejected + "c", List.of(previous));
         cognito.setGroup(other + "c");
         refreshWith(token).expectStatus().isOk();
@@ -495,7 +495,7 @@ class RefreshApiTest {
         var sub = UUID.randomUUID().toString();
         var username = "instructor-" + sub;
         cognito.addUser(new Member(username, sub, username + "@mail.com"));
-        var token = instructorToken(sub, username, number + "w");
+        var token = instructorToken(sub, username, number + "p");
 
         whileDatabaseRejects("instructors", "sub <> '%s'".formatted(sub), () ->
                 refreshWith(token).expectStatus().isOk().expectBody()
@@ -540,7 +540,7 @@ class RefreshApiTest {
         int number = cognito.newGroupNumber();
         var student = newStudent();
         cognito.setGroup(number + "c", List.of(student));
-        var token = instructorOf(number + "w");
+        var token = instructorOf(number + "p");
         refreshWith(token).expectStatus().isOk();
 
         jdbc.sql("ALTER TABLE students RENAME TO students_hidden").update();

@@ -163,7 +163,7 @@ class InstructorWorkApiTest {
         var student = taught.students().getFirst();
         int id = classroom.send(
                 taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(student));
-        var unknownInstructor = identityProvider.token(claims -> claims.claim("cognito:groups", List.of("17w")));
+        var unknownInstructor = identityProvider.token(claims -> claims.claim("cognito:groups", List.of("17p")));
         // Saved and with work, but the token no longer has an Instructor group in it.
         var noLongerAnInstructor = identityProvider.token(claims -> claims.subject(taught.instructor().sub()));
 
