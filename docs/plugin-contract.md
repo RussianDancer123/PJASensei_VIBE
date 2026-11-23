@@ -48,7 +48,6 @@ Sent with `Authorization: Bearer <accessToken>`:
 - `POST /api/ssh-keys` with `{ "publicKey" }` registers the SSH public key of the IDE. Adding the same key again changes nothing, so a plugin can do it at every start. See [Student work](../README.md#student-work) in the README for the answers.
 - `GET /api/ssh-keys` lists the caller's own keys, oldest first, as `[{ "id", "fingerprint", "createdAt" }]`, with the fingerprint in the `SHA256:...` form.
 - `DELETE /api/ssh-keys/{id}` removes one of them (204). Another person's key, or one that does not exist, gives a 404.
-
 - `PUT /api/student/assignments/{id}/finished` with `{ "finished": true | false }` sets or clears the Finished mark of the caller's own StudentRepository (204). Repeating it changes nothing. It is a plain flag: no access changes and nothing is sent. Without a StudentRepository for that Assignment it gives a 404. `GET /api/student/assignments/{id}` also gives `finished`.
 
 A plugin which registers its key at every start puts a deleted key back at the next start. This is intended: removing a key in the browser stops it only until that IDE starts the plugin again, so to stop it for good, remove it from the IDE as well.
