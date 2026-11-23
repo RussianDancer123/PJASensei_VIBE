@@ -169,6 +169,26 @@ document.addEventListener("alpine:init", () => {
       }
     },
 
+    // A failed save puts the checkbox back, and the error shows where Clone errors do.
+    async setFinished(event) {
+      this.workError = null;
+      const finished = event.target.checked;
+      try {
+        const response = await callApi(`/api/student/assignments/${this.preview.id}/finished`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ finished }),
+        });
+        if (!response.ok) {
+          throw new Error(await reasonFrom(response));
+        }
+        this.preview.finished = finished;
+      } catch (error) {
+        event.target.checked = !finished;
+        this.workError = error.message;
+      }
+    },
+
     sendCloneToPlugin(sshUrl, assignmentId) {
       sendToPlugin({ type: "clone", sshUrl, assignmentId });
     },

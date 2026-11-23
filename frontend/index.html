@@ -36,6 +36,8 @@
                       <div class="readme" x-show="preview.readme !== null" x-html="renderMarkdown(preview.readme)"></div>
                       <p x-show="preview.readme === null">This Assignment has no README to show.</p>
                       <button class="primary" @click="getRepository">Clone</button>
+                      <label class="finished"><input type="checkbox" :checked="preview.finished"
+                                                 @change="setFinished($event)"> Finished</label>
                     </div>
                   </template>
                 </div>
@@ -66,6 +68,7 @@
                           <button class="primary" x-show="recipient.sshUrl"
                                   @click="sendCloneToPlugin(recipient.sshUrl, openedAssignment.id)">Clone</button>
                           <span class="none" x-show="!recipient.sshUrl">no repository</span>
+                          <span class="state" x-show="recipient.finished !== null" x-text="recipient.finished ? 'finished' : 'in progress'"></span>
                         </div>
                       </template>
                     </div>
@@ -134,7 +137,9 @@
                 <h1 x-text="preview.title"></h1>
                 <div class="readme" x-show="preview.readme !== null" x-html="renderMarkdown(preview.readme)"></div>
                 <p x-show="preview.readme === null">This Assignment has no README to show.</p>
-                <p><button class="primary" @click="getRepository">Clone</button></p>
+                <p><button class="primary" @click="getRepository">Clone</button>
+                  <label class="finished"><input type="checkbox" :checked="preview.finished"
+                                                 @change="setFinished($event)"> Finished</label></p>
                 <template x-if="cloneCommand">
                   <div class="clone-cmd">
                     <input type="text" readonly aria-label="Clone command" :value="cloneCommand">
@@ -157,6 +162,7 @@
                         <button x-show="recipient.sshUrl" @click="copyText(recipient.sshUrl, recipient.sub)"
                                 x-text="copiedKey === recipient.sub ? 'Copied' : 'Copy'"></button>
                         <span class="none" x-show="!recipient.sshUrl">no repository</span>
+                        <span class="state" x-show="recipient.finished !== null" x-text="recipient.finished ? 'finished' : 'in progress'"></span>
                       </td>
                     </tr>
                   </template>

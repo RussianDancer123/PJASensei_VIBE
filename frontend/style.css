@@ -72,6 +72,8 @@ body:not(:has(.compact)) { margin: 0; }
 .detail table { border-collapse: collapse; width: 100%; }
 .detail td { border-top: 1px solid var(--border); padding: 0.4rem 0.5rem; }
 .detail td.num { font-family: var(--mono); font-weight: 600; }
+.state { color: var(--muted); font-size: 0.85em; white-space: nowrap; }
+.finished { margin-left: 0.75rem; white-space: nowrap; }
 .clone-cmd { display: flex; gap: 0.4rem; }
 .clone-cmd input { flex: 1; min-width: 0; font-family: var(--mono); }
 .detail textarea, .detail input[type="text"], .detail input[type="url"], .detail input[type="search"] { width: 100%; }
