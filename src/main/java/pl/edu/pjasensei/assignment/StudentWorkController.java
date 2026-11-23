@@ -10,7 +10,10 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClientException;
 import pl.edu.pjasensei.gitea.GiteaClient;
@@ -52,7 +55,24 @@ class StudentWorkController {
     @GetMapping("/api/student/assignments/{id}")
     Preview preview(@PathVariable long id, JwtAuthenticationToken authentication) {
         var repository = studentRepositoryOf(id, authentication);
-        return new Preview(id, repository.assignmentTitle(), gitea.readme(repository.repositoryName()).orElse(null));
+        return new Preview(
+                id,
+                repository.assignmentTitle(),
+                gitea.readme(repository.repositoryName()).orElse(null),
+                repository.finished());
+    }
+
+    /** A plain flag: it changes no access in Gitea and sends nothing. */
+    @PutMapping("/api/student/assignments/{id}/finished")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void markFinished(
+            @PathVariable long id, @RequestBody FinishedMark mark, JwtAuthenticationToken authentication) {
+        if (mark.finished() == null) {
+            throw new AssignmentRefused(HttpStatus.BAD_REQUEST, "Say whether it is finished: true or false.");
+        }
+        if (!store.markFinished(id, authentication.getName(), mark.finished())) {
+            throw new AssignmentRefused(HttpStatus.NOT_FOUND, "You have no such Assignment.");
+        }
     }
 
     @GetMapping("/api/student/assignments/{id}/ssh-address")
@@ -79,7 +99,10 @@ class StudentWorkController {
 
     record Assignments(List<AssignmentStore.AssignmentSummary> assignments) {}
 
-    record Preview(long id, String title, String readme) {}
+    record Preview(long id, String title, String readme, boolean finished) {}
+
+    /** {@code finished} is a boxed Boolean so that a missing value is refused rather than read as false. */
+    record FinishedMark(Boolean finished) {}
 
     record SshAddress(String sshUrl) {}
 }

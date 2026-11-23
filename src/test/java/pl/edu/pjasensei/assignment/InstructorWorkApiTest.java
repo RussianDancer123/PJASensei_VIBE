@@ -106,8 +106,44 @@ class InstructorWorkApiTest {
                 .jsonPath("$.recipients.length()").isEqualTo(1)
                 .jsonPath("$.recipients[0].studentNumber").isEqualTo(student.username())
                 .jsonPath("$.recipients[0].sshUrl").isEmpty()
-                // Only who they are and the address: no pulled, submitted or done statuses.
-                .jsonPath("$.recipients[0].length()").isEqualTo(3);
+                .jsonPath("$.recipients[0].finished").isEmpty()
+                // Only who they are, the address and the Finished mark: no pulled or submitted statuses.
+                .jsonPath("$.recipients[0].length()").isEqualTo(4);
+    }
+
+    @Test
+    void anAssignmentShowsTheFinishedMarkOfEachRecipientWithAStudentRepository() {
+        var taught = classroom.newTaughtClassGroup(2);
+        var done = taught.students().get(0);
+        var notDone = taught.students().get(1);
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), taught.students());
+        http.put().uri("/api/student/assignments/%d/finished".formatted(id))
+                .header("Authorization", "Bearer " + done.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("finished", true))
+                .exchange().expectStatus().isNoContent();
+
+        get(taught.instructor().token(), "/api/assignments/" + id)
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.recipients[?(@.sub == '%s')].finished".formatted(done.sub())).isEqualTo(true)
+                .jsonPath("$.recipients[?(@.sub == '%s')].finished".formatted(notDone.sub())).isEqualTo(false);
+    }
+
+    @Test
+    void anInstructorCannotSetTheFinishedMarkAndAnotherInstructorCannotSeeIt() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var rival = classroom.newTaughtClassGroup(1);
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), taught.students());
+
+        http.put().uri("/api/student/assignments/%d/finished".formatted(id))
+                .header("Authorization", "Bearer " + taught.instructor().token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("finished", true))
+                .exchange().expectStatus().isForbidden();
+        get(rival.instructor().token(), "/api/assignments/" + id).expectStatus().isNotFound();
     }
 
     @Test

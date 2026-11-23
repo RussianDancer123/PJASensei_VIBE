@@ -41,6 +41,6 @@ class InstructorWorkController {
 
     record Assignments(List<AssignmentStore.AssignmentSummary> assignments) {}
 
-    /** A recipient without a StudentRepository has a null {@code sshUrl}. */
+    /** A recipient without a StudentRepository has a null {@code sshUrl} and a null {@code finished}. */
     record OpenedAssignment(long id, String title, List<AssignmentStore.RecipientAddress> recipients) {}
 }

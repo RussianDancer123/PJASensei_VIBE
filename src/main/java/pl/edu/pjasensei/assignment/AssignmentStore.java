@@ -101,13 +101,20 @@ class AssignmentStore {
 
     Optional<StudentRepository> studentRepositoryOf(long assignment, String studentSub) {
         return jdbc.sql("""
-                        SELECT a.title AS assignment_title, sr.repository_name, sr.ssh_url
+                        SELECT a.title AS assignment_title, sr.repository_name, sr.ssh_url, sr.finished
                         FROM student_repositories sr JOIN assignments a ON a.id = sr.assignment_id
                         WHERE sr.assignment_id = ? AND sr.student_sub = ?
                         """)
                 .params(assignment, studentSub)
                 .query(StudentRepository.class)
                 .optional();
+    }
+
+    /** Sets or clears the Finished mark. False when this Student has no StudentRepository for the Assignment. */
+    boolean markFinished(long assignment, String studentSub, boolean finished) {
+        return jdbc.sql("UPDATE student_repositories SET finished = ? WHERE assignment_id = ? AND student_sub = ?")
+                .params(finished, assignment, studentSub)
+                .update() == 1;
     }
 
     /** The newest first. */
@@ -126,10 +133,10 @@ class AssignmentStore {
                 .optional();
     }
 
-    /** Every recipient, with the SSH address of their StudentRepository or null if they have none. */
+    /** Every recipient, with the SSH address and Finished mark of their StudentRepository, both null if they have none. */
     List<RecipientAddress> recipientAddressesOf(long assignment) {
         return jdbc.sql("""
-                        SELECT s.sub, s.student_number, sr.ssh_url
+                        SELECT s.sub, s.student_number, sr.ssh_url, sr.finished
                         FROM assignment_recipients r
                         JOIN students s ON s.sub = r.student_sub
                         LEFT JOIN student_repositories sr
@@ -144,11 +151,11 @@ class AssignmentStore {
 
     record Recipient(String sub, String studentNumber) {}
 
-    record RecipientAddress(String sub, String studentNumber, String sshUrl) {}
+    record RecipientAddress(String sub, String studentNumber, String sshUrl, Boolean finished) {}
 
     record AssignmentSummary(long id, String title) {}
 
     record AssignmentWithAddress(long id, String title, String sshUrl) {}
 
-    record StudentRepository(String assignmentTitle, String repositoryName, String sshUrl) {}
+    record StudentRepository(String assignmentTitle, String repositoryName, String sshUrl, boolean finished) {}
 }

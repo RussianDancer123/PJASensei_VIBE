@@ -41,6 +41,7 @@ public final class Classroom {
 
         return new TaughtClassGroup(
                 new Person(instructorSub, username, instructorToken),
+                number + "c",
                 members.stream()
                         .map(member -> new Person(member.sub(), member.username(), tokenWith(member.sub(), number + "c")))
                         .toList());
@@ -85,5 +86,5 @@ public final class Classroom {
 
     public record Person(String sub, String username, String token) {}
 
-    public record TaughtClassGroup(Person instructor, List<Person> students) {}
+    public record TaughtClassGroup(Person instructor, String classGroup, List<Person> students) {}
 }

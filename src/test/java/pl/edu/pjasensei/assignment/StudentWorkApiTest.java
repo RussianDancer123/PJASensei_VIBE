@@ -313,6 +313,102 @@ class StudentWorkApiTest {
                 .exchange();
     }
 
+    @Test
+    void aStudentSetsTheFinishedMarkReadsItBackClearsItAndSetsItAgain() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(student));
+        var preview = "/api/student/assignments/" + id;
+
+        get(student.token(), preview).expectStatus().isOk().expectBody().jsonPath("$.finished").isEqualTo(false);
+        for (boolean finished : List.of(true, true, false, false, true)) {
+            putFinished(student.token(), id, finished).expectStatus().isNoContent();
+            get(student.token(), preview)
+                    .expectStatus().isOk()
+                    .expectBody().jsonPath("$.finished").isEqualTo(finished);
+        }
+    }
+
+    @Test
+    void aStudentCannotSetTheFinishedMarkOfAnotherStudentOrOfAnAssignmentTheyDidNotReceive() {
+        var taught = classroom.newTaughtClassGroup(2);
+        var student = taught.students().get(0);
+        var other = taught.students().get(1);
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(student));
+
+        putFinished(other.token(), id, true).expectStatus().isNotFound();
+        putFinished(student.token(), Integer.MAX_VALUE, true).expectStatus().isNotFound();
+        get(student.token(), "/api/student/assignments/" + id)
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.finished").isEqualTo(false);
+    }
+
+    @Test
+    void anInstructorAndAnUnknownPersonCannotSetTheFinishedMark() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(student));
+        var unknownStudent = identityProvider.token(claims -> claims.claim("cognito:groups", List.of("17c")));
+
+        putFinished(taught.instructor().token(), id, true).expectStatus().isForbidden();
+        putFinished(unknownStudent, id, true).expectStatus().isForbidden();
+        http.put().uri("/api/student/assignments/%d/finished".formatted(id))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("finished", true))
+                .exchange().expectStatus().isUnauthorized();
+        get(student.token(), "/api/student/assignments/" + id)
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.finished").isEqualTo(false);
+    }
+
+    @Test
+    void theFinishedMarkNeedsATrueOrFalse() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(student));
+
+        for (Object body : List.of(Map.of(), Map.of("finished", "yes"))) {
+            http.put().uri("/api/student/assignments/%d/finished".formatted(id))
+                    .header("Authorization", "Bearer " + student.token())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .exchange().expectStatus().isBadRequest();
+        }
+    }
+
+    @Test
+    void aRefreshAndAChangeOfClassGroupKeepTheFinishedMark() {
+        var taught = classroom.newTaughtClassGroup(1);
+        var student = taught.students().getFirst();
+        int id = classroom.send(
+                taught.instructor(), "Sorting", gitea.newSourceRepository().url(), List.of(student));
+        putFinished(student.token(), id, true).expectStatus().isNoContent();
+
+        // The Student leaves the ClassGroup altogether.
+        cognito.setGroup(taught.classGroup());
+        http.post().uri("/api/refresh").header("Authorization", "Bearer " + taught.instructor().token())
+                .exchange().expectStatus().isOk();
+
+        get(student.token(), "/api/student/assignments/" + id)
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.finished").isEqualTo(true);
+        get(taught.instructor().token(), "/api/assignments/" + id)
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.recipients[0].finished").isEqualTo(true);
+    }
+
+    private RestTestClient.ResponseSpec putFinished(String token, int assignment, boolean finished) {
+        return http.put().uri("/api/student/assignments/%d/finished".formatted(assignment))
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("finished", finished))
+                .exchange();
+    }
+
     private RestTestClient.ResponseSpec get(String token, String path) {
         return http.get().uri(path).header("Authorization", "Bearer " + token).exchange();
     }
