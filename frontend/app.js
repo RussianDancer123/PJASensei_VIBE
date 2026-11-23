@@ -173,8 +173,9 @@ document.addEventListener("alpine:init", () => {
     async setFinished(event) {
       this.workError = null;
       const finished = event.target.checked;
+      const preview = this.preview;
       try {
-        const response = await callApi(`/api/student/assignments/${this.preview.id}/finished`, {
+        const response = await callApi(`/api/student/assignments/${preview.id}/finished`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ finished }),
@@ -182,7 +183,7 @@ document.addEventListener("alpine:init", () => {
         if (!response.ok) {
           throw new Error(await reasonFrom(response));
         }
-        this.preview.finished = finished;
+        preview.finished = finished;
       } catch (error) {
         event.target.checked = !finished;
         this.workError = error.message;
