@@ -177,7 +177,7 @@ public final class TestAi {
             send(exchange, 404, Map.of("message", "Unknown session"));
             return;
         }
-        if (!readsAsCodeContext(message.path("code_context"))) {
+        if (!isCodeContext(message.path("code_context"))) {
             send(exchange, 422, Map.of("detail", "code_context is not of the right shape"));
             return;
         }
@@ -193,7 +193,7 @@ public final class TestAi {
     }
 
     /** Optional, but when sent it holds the open file's name and code, and the names of other open files. */
-    private static boolean readsAsCodeContext(JsonNode context) {
+    private static boolean isCodeContext(JsonNode context) {
         if (context.isMissingNode()) {
             return true;
         }

@@ -13,7 +13,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Spring's only way to the AI, which nothing else may reach, and the only place that knows the AI's JSON:
- * the plugin keeps {@code content}, {@code reply} and the roles {@code student} and {@code tutor}. Every
+ * the plugin keeps {@code content}, {@code files}, {@code reply} and the roles {@code student} and {@code tutor}. Every
  * call may throw a {@link RestClientException}.
  */
 @Component
@@ -66,7 +66,7 @@ class AiClient {
     JsonNode sendMessage(String session, byte[] message) {
         var question = (ObjectNode) JSON.readTree(message);
         question.set("question", question.remove("content"));
-        withCodeContext(question);
+        filesToCodeContext(question);
         var answer = http.post()
                 .uri("/conversations/{id}/messages", session)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -83,7 +83,7 @@ class AiClient {
 
     // TODO: temporary — remove when the AI reads files. Until then it reads only the file open in the editor,
     // which the plugin always sends first, as code_context, and the names of the other files.
-    private static void withCodeContext(ObjectNode question) {
+    private static void filesToCodeContext(ObjectNode question) {
         var files = question.remove("files");
         if (files == null || files.isEmpty()) {
             return;

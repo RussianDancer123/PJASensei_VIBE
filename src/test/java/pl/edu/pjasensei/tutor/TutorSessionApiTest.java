@@ -243,7 +243,7 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void theAiGetsTheTextOfAMessageAsItsQuestionAndTheRestUnchanged() {
+    void theAiGetsTheTextOfAMessageAsItsQuestionAndTheRestUnchangedButFiles() {
         var work = newWork();
 
         send(work, "{\"extra\":[1,2.5],\"content\":\"zażółć\",\"files\":[]}").expectStatus().isOk();
