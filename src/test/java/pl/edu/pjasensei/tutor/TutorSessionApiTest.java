@@ -252,7 +252,8 @@ class TutorSessionApiTest {
         assertThat(message.get("question").asString()).isEqualTo("zażółć");
         assertThat(message.has("content")).isFalse();
         assertThat(message.get("extra").toString()).isEqualTo("[1,2.5]");
-        assertThat(message.get("files").isArray()).isTrue();
+        assertThat(message.has("files")).isFalse();
+        assertThat(message.has("code_context")).isFalse();
     }
 
     @Test
@@ -269,16 +270,21 @@ class TutorSessionApiTest {
     }
 
     @Test
-    void attachedFilesAreKeptWithTheirMessage() {
+    void theAiGetsTheFirstFileAsTheCodeAndTheOthersByName() {
         var work = newWork();
 
-        send(work, "{\"content\":\"look\",\"files\":[{\"path\":\"src/A.java\",\"content\":\"class A {}\"}]}")
-                .expectStatus().isOk();
+        send(work, """
+                {"content":"look","files":[
+                  {"path":"src/A.java","content":"class A {}"},
+                  {"path":"src/B.java","content":"class B {}"},
+                  {"path":"README.md","content":"# readme"}]}
+                """).expectStatus().isOk();
 
-        history(work).expectBody()
-                .jsonPath("$.messages[0].files[0].path").isEqualTo("src/A.java")
-                .jsonPath("$.messages[0].files[0].content").isEqualTo("class A {}")
-                .jsonPath("$.messages[1].files").doesNotExist();
+        var message = ai.lastMessage();
+        assertThat(message.has("files")).isFalse();
+        assertThat(message.get("code_context").toString()).isEqualTo(
+                "{\"current_file_name\":\"src/A.java\",\"current_code\":\"class A {}\","
+                        + "\"open_files\":[\"src/B.java\",\"README.md\"]}");
     }
 
     @Test

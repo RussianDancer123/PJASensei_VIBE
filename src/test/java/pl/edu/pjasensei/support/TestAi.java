@@ -8,7 +8,6 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -178,21 +177,30 @@ public final class TestAi {
             send(exchange, 404, Map.of("message", "Unknown session"));
             return;
         }
+        if (!readsAsCodeContext(message.path("code_context"))) {
+            send(exchange, 422, Map.of("detail", "code_context is not of the right shape"));
+            return;
+        }
         if (replyBody != null) {
             sendRaw(exchange, replyBody);
             return;
         }
         var question = message.get("question").asString();
         var answer = new StringBuilder(question).reverse().toString();
-        var student = new LinkedHashMap<String, Object>();
-        student.put("role", "user");
-        student.put("content", question);
-        if (message.has("files")) {
-            student.put("files", message.get("files"));
-        }
-        history.add(student);
+        history.add(Map.of("role", "user", "content", question));
         history.add(Map.of("role", "assistant", "content", answer));
         send(exchange, 200, Map.of("answer", answer));
+    }
+
+    /** Optional, but when sent it holds the open file's name and code, and the names of other open files. */
+    private static boolean readsAsCodeContext(JsonNode context) {
+        if (context.isMissingNode()) {
+            return true;
+        }
+        var openFiles = context.path("open_files");
+        return context.path("current_file_name").isString()
+                && context.path("current_code").isString()
+                && (openFiles.isMissingNode() || openFiles.isArray() && openFiles.valueStream().allMatch(JsonNode::isString));
     }
 
     private void history(HttpExchange exchange, String id) throws IOException {

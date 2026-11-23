@@ -58,16 +58,16 @@ A Student or Instructor Refresh has not added yet gets a 403 here, as everywhere
 
 The plugin calls Spring directly with its access token, never the AI. `GET /api/student/assignments` gives the Assignments to choose from, each `{ "id", "title" }`. To follow the repository open in the IDE, add one `repository` parameter per git remote address of it: `GET /api/student/assignments?repository=git@host:owner/name.git&repository=...` gives only the Assignments whose StudentRepository is one of them, normally none or one. Both `ssh://user@host:port/owner/name.git` and `user@host:owner/name` work, with or without `.git`; only `owner/name` counts, without regard to letter case, and the host and port are ignored. An address that matches nothing, or cannot be read, gives an empty list rather than an error, so the plugin can let the Student choose. A TutorSession belongs to one Assignment's StudentRepository, and Spring makes it on first use.
 
-**`GET /api/student/assignments/{id}/tutor-session/messages`** gives the history, oldest first. `files` appears only on student messages that had them:
+**`GET /api/student/assignments/{id}/tutor-session/messages`** gives the history, oldest first, as the AI gives it back. Each message has at least a `role` and its `content`; anything else is whatever the AI keeps, so do not count on the `files` sent being in it:
 
 ```json
 { "messages": [
-  { "role": "student", "content": "...", "files": [{ "path": "...", "content": "..." }] },
+  { "role": "student", "content": "..." },
   { "role": "tutor", "content": "..." }
 ] }
 ```
 
-**`POST /api/student/assignments/{id}/tutor-session/messages`** sends a message and gives `{ "reply": "..." }`. `files` is optional and text-only:
+**`POST /api/student/assignments/{id}/tutor-session/messages`** sends a message and gives `{ "reply": "..." }`. `files` is optional and text-only. Put the file open in the editor first: for now the AI reads only that one, and only the paths of the others:
 
 ```json
 { "content": "...", "files": [{ "path": "...", "content": "..." }] }

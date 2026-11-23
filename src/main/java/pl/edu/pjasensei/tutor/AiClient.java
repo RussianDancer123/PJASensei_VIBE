@@ -66,6 +66,7 @@ class AiClient {
     JsonNode sendMessage(String session, byte[] message) {
         var question = (ObjectNode) JSON.readTree(message);
         question.set("question", question.remove("content"));
+        withCodeContext(question);
         var answer = http.post()
                 .uri("/conversations/{id}/messages", session)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -78,6 +79,23 @@ class AiClient {
         var reply = (ObjectNode) answer;
         reply.set("reply", reply.remove("answer"));
         return reply;
+    }
+
+    // TODO: temporary — remove when the AI reads files. Until then it reads only the file open in the editor,
+    // which the plugin always sends first, as code_context, and the names of the other files.
+    private static void withCodeContext(ObjectNode question) {
+        var files = question.remove("files");
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+        var open = files.get(0);
+        var context = question.putObject("code_context");
+        context.set("current_file_name", open.get("path"));
+        context.set("current_code", open.get("content"));
+        var others = context.putArray("open_files");
+        for (int i = 1; i < files.size(); i++) {
+            others.add(files.get(i).get("path"));
+        }
     }
 
     JsonNode history(String session) {
