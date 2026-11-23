@@ -34,7 +34,7 @@ class GroupSuffixConfigurationApiTest {
 
     @Test
     void theDefaultSuffixesNoLongerGiveARole() {
-        rolesOf(List.of("17w", "17c")).jsonPath("$.roles").isEmpty();
+        rolesOf(List.of("17p", "17c")).jsonPath("$.roles").isEmpty();
     }
 
     @Test

@@ -38,6 +38,16 @@ class RolesApiTest {
     }
 
     @Test
+    void aLectureGroupGivesNoRole() {
+        rolesOf(List.of("17w")).jsonPath("$.roles").isEmpty();
+    }
+
+    @Test
+    void aStudentAlsoInALectureGroupIsAStudentOnly() {
+        rolesOf(List.of("17c", "17w")).jsonPath("$.roles").isEqualTo(List.of("STUDENT"));
+    }
+
+    @Test
     void otherGroupsDoNotAffectTheOnesThatMatch() {
         rolesOf(List.of("eu-central-1_abc123_Google", "17c")).jsonPath("$.roles").isEqualTo(List.of("STUDENT"));
     }
